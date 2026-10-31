@@ -20,6 +20,7 @@ class IntTable:
     endian: str = "<"
     name_key: str = ""  # locale key of the table's name; defaults to `id`
     limit: int | None = None  # in-game cap; None = whatever the int size holds
+    first_number: int = 1  # in-game list number of entry 0 (display only; indexes stay 0-based)
 
     @property
     def fmt(self) -> str:
@@ -42,6 +43,9 @@ class IntTable:
     def entry_id(self, index: int) -> str:
         return f"{self.id}.{index}"
 
+    def number(self, index: int) -> int:
+        return self.first_number + index
+
 
 # --- arte usage counts: u16 LE every 12 bytes, one block per character ---
 ARTE_STRIDE = 12
@@ -56,12 +60,13 @@ def _artes(character: str, offset: int, count: int) -> IntTable:
 
 ARTES = (
     _artes("asbel", 0x0762, 36),
-    _artes("sophie", 0x133A, 35),
+    _artes("sophie", 0x133A, 36),
     _artes("hubert", 0x1F12, 31),
     _artes("cheria", 0x2AEA, 32),
     _artes("malik", 0x36C2, 33),
     _artes("pascal", 0x429A, 32),
     # Richard: not found yet; 0x4E72 (= Pascal + ARTE_BLOCK) is the obvious guess.
+    #_artes("richard", 0x4E72, 26),
 )
 
 
@@ -70,22 +75,31 @@ CONSUMABLE_LIMIT = 30
 ITEM_LIMIT = 15
 
 
-def _items(category: str, offset: int, count: int, limit: int = ITEM_LIMIT) -> IntTable:
-    return IntTable(f"item.{category}", offset, count, size=1, stride=1, limit=limit)
+def _items(category: str, offset: int, count: int, limit: int = ITEM_LIMIT, first_number: int = 1) -> IntTable:
+    return IntTable(f"item.{category}", offset, count, size=1, stride=1, limit=limit, first_number=first_number)
 
+
+# in-game numbering runs on through materials, sellables and ingredients
+MATERIAL_COUNT, SELLABLE_COUNT = 123, 66
 
 ITEMS = (
     _items("consumable", 0xA641, 35, limit=CONSUMABLE_LIMIT),
     _items("dish", 0xA664, 109),  # 0xA6D1-0xA6E0 after it: unmapped
-    _items("material", 0xA6E1, 123),
-    _items("sellable", 0xA75C, 66),
-    _items("ingredient", 0xA79E, 47),  # 0xA7CD-0xA7D7 after it: unmapped
+    _items("material", 0xA6E1, MATERIAL_COUNT),
+    _items("sellable", 0xA75C, SELLABLE_COUNT, first_number=1 + MATERIAL_COUNT),
+    _items("ingredient", 0xA79E, 47, first_number=1 + MATERIAL_COUNT + SELLABLE_COUNT),  # 0xA7CD-0xA7D7 after it: unmapped
 )
 
-TABLES: dict[str, IntTable] = {t.id: t for t in ARTES + ITEMS}
+# --- misc single values (gald, ...): one-entry tables, e.g.
+#   IntTable("misc.gald", 0x1234, 1, size=4, stride=4, limit=999999)
+# with "misc.gald" / "misc.gald.0" names in the locale files. None mapped yet.
+MISC: tuple[IntTable, ...] = ()
+
+TABLES: dict[str, IntTable] = {t.id: t for t in ARTES + ITEMS + MISC}
 GROUPS: dict[str, tuple[str, ...]] = {
     "artes": tuple(t.id for t in ARTES),
     "items": tuple(t.id for t in ITEMS),
+    "misc": tuple(t.id for t in MISC),
 }
 
 

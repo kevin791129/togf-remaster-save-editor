@@ -74,10 +74,10 @@ class NativeData:
         for i in range(table(table_id).count):
             self.set(table_id, i, value)
 
-    def rows(self, table_id: str, lang: str = i18n.DEFAULT_LANG) -> list[dict]:
-        """Table entries with id, display name, offset and current value."""
+    def rows(self, table_id: str, lang: str | None = None) -> list[dict]:
+        """Table entries with in-game number, id, display name, offset and current value."""
         t = table(table_id)
-        return [{"index": i, "id": t.entry_id(i), "name": i18n.name(t.entry_id(i), lang),
+        return [{"index": i, "number": t.number(i), "id": t.entry_id(i), "name": i18n.name(t.entry_id(i), lang),
                  "offset": t.offset_of(i), "value": self.get(table_id, i)} for i in range(t.count)]
 
     # --- shards ---
@@ -140,7 +140,7 @@ class NativeData:
         for t, (_, actual) in self.shard_count_mismatches().items():
             self.data[L.SHARD_COUNT_OFFSET + t] = actual
 
-    def shard_rows(self, lang: str = i18n.DEFAULT_LANG) -> list[dict]:
+    def shard_rows(self, lang: str | None = None) -> list[dict]:
         """Every slot with its raw bytes and, if it holds a shard, values and names.
         A slot with unrecognised bytes gets an "error" instead of failing the whole list."""
         rows = []

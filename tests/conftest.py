@@ -9,6 +9,12 @@ from .helpers import make_save, make_slots
 load_dotenv()  # TEST_TOGF_SAVE can be set in .env
 
 
+@pytest.fixture(autouse=True)
+def default_lang(monkeypatch):
+    """Tests check names in zh-Hant when no language is given; don't let .env change that."""
+    monkeypatch.setenv("DEFAULT_LANG", "zh-Hant")
+
+
 @pytest.fixture
 def save_bytes() -> bytes:
     return make_save(*make_slots())

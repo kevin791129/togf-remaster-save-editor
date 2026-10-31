@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "httpx>=0.27"]
+dev = ["pytest>=8", "httpx2"]
 
 [project.scripts]
 togf-save = "togf_save.cli:main"
@@ -28,7 +28,7 @@ togf-save = "togf_save.cli:main"
 include = ["togf_save*"]
 
 [tool.setuptools.package-data]
-togf_save = ["locales/*.json", "web/static/*"]
+togf_save = ["locales/*/*.json", "web/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

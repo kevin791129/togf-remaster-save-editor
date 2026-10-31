@@ -1,6 +1,6 @@
 import pytest
 
-from togf_save import read_save
+from togf_save import i18n, read_save
 from togf_save.cli import main
 from togf_save.native import NativeData, Shard, layout as L
 
@@ -30,10 +30,16 @@ def native_of(path) -> NativeData:
 # --- info / decode / encode (.sav) ---
 
 def test_info(sav, capsys):
-    assert main(["info", str(sav)]) == 0
+    assert main(["info", str(sav), "--lang", "en"]) == 0
     out = capsys.readouterr().out
-    assert "backup identical: True" in out
+    assert "backup identical: yes" in out
     assert "slot2.NativeData  79104 bytes" in out
+
+
+def test_info_zh(sav, capsys):
+    assert main(["info", str(sav), "--lang", "zh-Hant"]) == 0
+    out = capsys.readouterr().out
+    assert "備份相同：是" in out and "79104 位元組" in out
 
 
 def test_decode_encode_roundtrip(sav, tmp_path):
@@ -68,16 +74,17 @@ def test_full_workflow(sav, tmp_path):
 
 
 def test_missing_file(tmp_path, capsys):
-    assert main(["info", str(tmp_path / "nope.sav")]) == 1
+    assert main(["info", str(tmp_path / "nope.sav"), "--lang", "en"]) == 1
     assert "error:" in capsys.readouterr().err
 
 
 # --- table (.bin) ---
 
 def test_table_list(native_bin, capsys):
-    assert main(["table", str(native_bin)]) == 0
+    assert main(["table", str(native_bin), "--lang", "en"]) == 0
     out = capsys.readouterr().out
     assert "item.consumable" in out and "max 30" in out and "max 9999" in out
+    assert "Misc" in out  # empty group still listed
 
 
 def test_table_rows(native_bin, capsys):
@@ -96,6 +103,18 @@ def test_table_set_all_to_output(native_bin, tmp_path):
     assert main(["table", str(native_bin), "arte.asbel", "--set-all", "9999", "-o", str(out)]) == 0
     assert native_of(out).values("arte.asbel") == [9999] * 36
     assert native_of(native_bin).values("arte.asbel") == [0] * 36  # source untouched
+
+
+@pytest.mark.parametrize("table_id,limit", [("arte.asbel", 9999), ("item.consumable", 30), ("item.dish", 15)])
+def test_table_set_all_max(native_bin, table_id, limit):
+    assert main(["table", str(native_bin), table_id, "--set-all", "max"]) == 0
+    values = native_of(native_bin).values(table_id)
+    assert values == [limit] * len(values)
+
+
+def test_table_set_all_bad_value(native_bin):
+    with pytest.raises(SystemExit):
+        main(["table", str(native_bin), "item.dish", "--set-all", "lots"])
 
 
 def test_table_over_limit(native_bin, capsys):
@@ -129,9 +148,10 @@ def test_shards(native_bin, capsys):
     assert native_of(native_bin).shard(3) == Shard(1, 3, 10)
     capsys.readouterr()
 
-    assert main(["shards", str(native_bin)]) == 0
+    assert main(["shards", str(native_bin), "--lang", "en"]) == 0
     out = capsys.readouterr().out
-    assert "攻擊碎片 (1)  帥氣 (3)  10" in out and "1/199 slots used" in out
+    names = f"{i18n.name('shard.type.1', 'en')} (1)  {i18n.name('shard.nature.3', 'en')} (3)  10"
+    assert names in out and "1/199 slots used" in out
 
     assert main(["shards", str(native_bin), "--clear", "3"]) == 0
     native = native_of(native_bin)
@@ -139,11 +159,17 @@ def test_shards(native_bin, capsys):
 
 
 def test_shards_types(capsys):
-    assert main(["shards", "--types"]) == 0  # no NATIVE needed
+    assert main(["shards", "--types", "--lang", "zh-Hant"]) == 0  # no NATIVE needed
     out = capsys.readouterr().out
     assert "種類 (1-26)" in out and "   26  加碼碎片" in out
-    assert "性質 (1-54)" in out and "    3  帥氣" in out and "shard.nature.34" in out
+    assert "性質 (1-54)" in out and "    3  帥氣" in out
     assert "強度 (1-10)" in out
+
+
+def test_shards_types_en(capsys):
+    assert main(["shards", "--types", "--lang", "en"]) == 0
+    out = capsys.readouterr().out
+    assert "Type (1-26)" in out and "Nature (1-54)" in out and "Strength (1-10)" in out
 
 
 def test_shards_needs_native(capsys):

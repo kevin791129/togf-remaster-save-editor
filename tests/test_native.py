@@ -90,8 +90,16 @@ def test_set_all(native):
 def test_rows(native):
     native.set("item.consumable", 4, 3)
     row = native.rows("item.consumable")[4]
-    assert row == {"index": 4, "id": "item.consumable.4", "name": "萬靈藥瓶", "offset": 0xA645, "value": 3}
-    assert native.rows("item.material")[37]["name"] == "item.material.37"  # unknown -> id
+    assert row == {"index": 4, "number": 5, "id": "item.consumable.4", "name": "萬靈藥瓶", "offset": 0xA645,
+                   "value": 3}
+
+
+def test_numbers_continue_across_material_sellable_ingredient():
+    material, sellable, ingredient = (L.TABLES[f"item.{c}"] for c in ("material", "sellable", "ingredient"))
+    assert material.number(0) == 1
+    assert sellable.number(0) == material.number(material.count - 1) + 1 == 124
+    assert ingredient.number(0) == sellable.number(sellable.count - 1) + 1 == 190
+    assert L.TABLES["item.dish"].number(0) == 1 and L.TABLES["arte.asbel"].number(0) == 1
 
 
 def test_too_small():
@@ -177,15 +185,25 @@ def test_edit_through_save(save_bytes):
 # --- locales ---
 
 def test_default_locale_listed():
-    assert i18n.available()[i18n.DEFAULT_LANG] == "繁體中文"
+    assert i18n.available()[i18n.FALLBACK_LANG] == "日本語"
+
+
+def test_default_lang_from_env(monkeypatch):
+    monkeypatch.delenv("DEFAULT_LANG", raising=False)
+    assert i18n.default_lang() == i18n.FALLBACK_LANG
+    monkeypatch.setenv("DEFAULT_LANG", "xx")
+    assert i18n.default_lang() == "xx"
+    with pytest.raises(ValueError):
+        i18n.name("item.consumable.0")
 
 
 def test_locale_keys_within_tables():
     """Catches miscounted tables: no name for an index past the end."""
-    for key in i18n.load(i18n.DEFAULT_LANG):
-        m = re.fullmatch(r"(.+)\.(\d+)", key)
-        if m and m.group(1) in L.TABLES:
-            assert int(m.group(2)) < L.TABLES[m.group(1)].count, key
+    for lang in i18n.available():
+        for key in i18n.load(lang, "names"):
+            m = re.fullmatch(r"(.+)\.(\d+)", key)
+            if m and m.group(1) in L.TABLES:
+                assert int(m.group(2)) < L.TABLES[m.group(1)].count, f"{lang}: {key}"
 
 
 def test_every_table_has_a_name():
@@ -194,10 +212,57 @@ def test_every_table_has_a_name():
 
 
 def test_shard_names_complete_where_known():
-    names = i18n.load(i18n.DEFAULT_LANG)
+    names = i18n.load(i18n.FALLBACK_LANG, "names")
     assert all(f"shard.type.{t}" in names for t in range(1, L.SHARD_TYPES + 1))
     assert f"shard.nature.{L.SHARD_NATURES}" in names
     assert f"shard.nature.{L.SHARD_NATURES + 1}" not in names
+
+
+def test_languages():
+    assert i18n.available() == {"en": "English", "ja": "日本語", "zh-Hant": "繁體中文"}
+
+
+@pytest.mark.parametrize("lang", ["en", "zh-Hant"])
+def test_ui_files_have_the_same_keys(lang):
+    assert i18n.load(lang, "ui").keys() == i18n.load(i18n.FALLBACK_LANG, "ui").keys()
+
+
+@pytest.mark.parametrize("kind", ["names", "ui"])
+def test_fallback_has_every_key(kind):
+    fallback = i18n.load(i18n.FALLBACK_LANG, kind).keys()
+    for lang in i18n.available():
+        missing = sorted(i18n.load(lang, kind).keys() - fallback)
+        assert not missing, f"{len(missing)} {lang} keys missing from {i18n.FALLBACK_LANG}: {missing[:10]}"
+
+
+@pytest.mark.parametrize("lang", ["en", "ja", "zh-Hant"])
+def test_ui_placeholders_match(lang):
+    """A translation must use the same {placeholders} as the fallback, or format() breaks."""
+    fallback = i18n.load(i18n.FALLBACK_LANG, "ui")
+    for key, template in i18n.load(lang, "ui").items():
+        assert set(re.findall(r"\{(\w+)\}", template)) == set(re.findall(r"\{(\w+)\}", fallback[key])), key
+
+
+def test_ui_text():
+    assert i18n.text("shards.used", "en", used=3, slots=199) == "3/199 slots used"
+    assert i18n.text("shards.used", "zh-Hant", used=3, slots=199) == "已使用 3/199 個欄位"
+    assert i18n.text("no.such.key", "en") == "no.such.key"
+    assert i18n.ui_strings("en")["group.items"] == "Items"
+
+
+def test_names_fall_back(tmp_path, monkeypatch):
+    """A language without a name (or without names.json) falls back to FALLBACK_LANG, then the id."""
+    (tmp_path / "xx").mkdir()
+    fallback = tmp_path / i18n.FALLBACK_LANG
+    fallback.mkdir()
+    (fallback / "names.json").write_text('{"item.consumable.4": "萬靈藥瓶"}', encoding="utf-8")
+    monkeypatch.setattr(i18n, "LOCALES_DIR", tmp_path)
+    i18n.load.cache_clear()
+    try:
+        assert i18n.name("item.consumable.4", "xx") == "萬靈藥瓶"
+        assert i18n.name("item.consumable.5", "xx") == "item.consumable.5"
+    finally:
+        i18n.load.cache_clear()
 
 
 def test_unknown_language():

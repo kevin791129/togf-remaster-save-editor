@@ -1,10 +1,4 @@
 {
-  "language.name": "繁體中文",
-
-  "group.artes": "術・技使用次數",
-  "group.items": "道具",
-  "group.shards": "碎片",
-
   "character.asbel": "艾斯貝爾",
   "character.sophie": "蘇菲",
   "character.hubert": "修伯特",
@@ -31,7 +25,7 @@
   "arte.sophie.20": "艾斯貝破星斬", "arte.sophie.21": "修伯踢", "arte.sophie.22": "雪莉投彈", "arte.sophie.23": "馬克利反轉",
   "arte.sophie.24": "絲可砲擊", "arte.sophie.25": "大災難", "arte.sophie.26": "雙撞掌底破", "arte.sophie.27": "獅子戰吼",
   "arte.sophie.28": "點穴縛態", "arte.sophie.30": "輪迴轉生", "arte.sophie.31": "巨斧爆裂",
-  "arte.sophie.32": "無限魂擊", "arte.sophie.33": "零次解離", "arte.sophie.34": "火龍炎舞",
+  "arte.sophie.32": "無限魂擊", "arte.sophie.33": "零次解離", "arte.sophie.35": "火龍炎舞",
 
   "arte.hubert.0": "弦月", "arte.hubert.1": "新月", "arte.hubert.2": "深月", "arte.hubert.3": "流星",
   "arte.hubert.4": "虎牙破斬", "arte.hubert.5": "斬風牙", "arte.hubert.6": "斷雷牙", "arte.hubert.7": "崩爆華",
@@ -174,11 +168,6 @@
   "item.ingredient.36": "牛奶", "item.ingredient.37": "起司", "item.ingredient.38": "梅干", "item.ingredient.39": "海苔",
   "item.ingredient.40": "豆腐", "item.ingredient.41": "納豆", "item.ingredient.42": "味噌", "item.ingredient.43": "巧克力",
   "item.ingredient.44": "茶葉", "item.ingredient.45": "紅酒", "item.ingredient.46": "白酒",
-
-  "shard.field.type": "種類",
-  "shard.field.nature": "性質",
-  "shard.field.strength": "強度",
-  "shard.empty": "（空）",
 
   "shard.type.1": "攻擊碎片", "shard.type.2": "防禦碎片", "shard.type.3": "精神碎片", "shard.type.4": "隔絕碎片",
   "shard.type.5": "命中碎片", "shard.type.6": "迴避碎片", "shard.type.7": "生命碎片", "shard.type.8": "速度碎片",
