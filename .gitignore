@@ -1,0 +1,22 @@
+# Claude Code info
+prompt/*
+
+# Temporary files
+temp/*
+
+# Save data
+*.sav
+*.sav.bak
+SaveDat*/
+
+# Local settings
+.env
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/

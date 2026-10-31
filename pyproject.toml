@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "togf-save-editor"
+version = "0.1.0"
+description = "Save editor for Tales of Graces f Remastered (PS5): decode, edit and re-encode SaveDat*.sav"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+    "pycryptodome>=3.20",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "python-multipart>=0.0.9",
+    "loguru>=0.7",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+togf-save = "togf_save.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["togf_save*"]
+
+[tool.setuptools.package-data]
+togf_save = ["locales/*.json", "web/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
