@@ -39,6 +39,7 @@ copy [.env.example](.env.example) to `.env` and edit it. `.env` is not committed
 | `DEFAULT_LANG` | CLI, web | Language for names, matching a folder name in `togf_save/locales`. Default `ja`. |
 | `WEB_HOST` | `togf-save serve` | Address the server listens on. Default `127.0.0.1`, which is this computer only. |
 | `WEB_PORT` | `togf-save serve` | Port. Default `8000`. |
+| `LOG_ENABLED` | CLI, web | Write a log file. Default `false`. See [Logging](#logging) for the other `LOG_*` settings. |
 
 ## Tests
 
@@ -59,7 +60,34 @@ from loguru import logger
 logger.enable("togf_save")
 ```
 
-The CLI and the web app turn it on themselves.
+The CLI and the web editor set logging up themselves:
+
+- **Console:** the CLI logs with `-v` (INFO) or `-vv` (DEBUG). `togf-save serve` always logs to
+  the console, at `LOG_CONSOLE_LEVEL`.
+- **Log file:** with `LOG_ENABLED=true`, both also write to `LOG_DIR/LOG_FILE_NAME`
+  (`logs/togf_save.log` by default). `logs/` is ignored by git.
+
+Running `uvicorn togf_save.web.app:app` directly applies the same settings when the server
+starts. Tests never write log files.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LOG_ENABLED` | `false` | Write a log file. |
+| `LOG_DIR` | `logs` | Folder for log files, relative to where you run the command. |
+| `LOG_FILE_NAME` | `togf_save.log` | Log file name. |
+| `LOG_LEVEL` | `DEBUG` | Lowest level written to the file: `TRACE`, `DEBUG`, `INFO`, `SUCCESS`, `WARNING`, `ERROR`, `CRITICAL`. |
+| `LOG_CONSOLE_LEVEL` | `INFO` | Lowest level `serve` prints to the console. The CLI uses `-v` / `-vv` instead. |
+| `LOG_ROTATION` | `10 MB` | When to start a new file: a size (`10 MB`), an interval (`1 day`) or a time of day (`00:00`). |
+| `LOG_RETENTION` | `14 days` | When to delete old files: an age (`14 days`) or a number of files to keep (`10`). |
+| `LOG_COMPRESSION` | empty | Compress rotated files: `zip`, `gz`, `bz2`, `xz`, `tar.gz`, ... Empty means no compression. |
+| `LOG_FORMAT` | time, level, module:function:line, message | File line format, as a loguru format string. |
+| `LOG_SERIALIZE` | `false` | Write one JSON object per line instead of `LOG_FORMAT`. |
+| `LOG_BACKTRACE` | `true` | Full stack trace on errors. |
+| `LOG_DIAGNOSE` | `false` | Also print variable values in stack traces. They can include save data. |
+| `LOG_ENQUEUE` | `true` | Write through a background queue, which is safe with the web server's threads. |
+
+A blank value uses the default. An invalid value, such as `LOG_ROTATION=whenever`, stops the
+command with an error that names the `LOG_*` setting.
 
 ## Usage
 
@@ -80,9 +108,28 @@ save.native = native.to_bytes()
 write_save(save, "SaveDat000.sav")  # first overwrite moves the original to SaveDat000.sav.bak
 ```
 
-Table ids are `arte.<character>` (asbel, sophie, hubert, cheria, malik, pascal) and
-`item.<category>` (consumable, dish, material, sellable, ingredient). See
-[togf_save/native/layout/](togf_save/native/layout/) for offsets.
+Table ids:
+
+- `<character>.stat`, `<character>.arte`, `<character>.counter`, `<character>.together`, for
+  asbel, sophie, hubert, cheria, malik and pascal. The character map, with how sure each field
+  is, is in [docs/character-block.md](docs/character-block.md).
+- `item.<category>` for consumable, dish, material, sellable and ingredient. See
+  [docs/items.md](docs/items.md).
+- `misc` for single values (gald). See [docs/misc.md](docs/misc.md).
+
+Shards have their own API (`set_shard`, `shard_rows`, ...); their layout is in
+[docs/shards.md](docs/shards.md). Data found in the save but not mapped yet is collected in
+[docs/unused-findings.md](docs/unused-findings.md).
+
+Offsets are in [togf_save/native/layout/](togf_save/native/layout/).
+
+Some fields have flags:
+
+- **Read-only** fields, such as stats and battles fought together, are only written with
+  `set(..., force=True)`.
+- **Hidden** fields, such as unknown counters, are left out of `rows()` unless you pass
+  `show_hidden=True`.
+- `set_all` and `set_all_max` only touch fields marked for bulk edits.
 
 To edit with your own tools, `togf_save.folder` has `export_folder(save, dir)` and
 `import_folder(dir)`. They use the same folder format as the CLI `decode` and `encode` commands.
@@ -103,10 +150,12 @@ togf-save info   SAVE                         # layout, CRC and backup status
 togf-save decode SAVE [OUTDIR]                # -> slot1.raw, slot1.json, slot2.json, slot2.*.bin
 togf-save encode DIR  [OUT]                   # folds edited .bin files back in; OUT defaults to DIR.sav
 
-togf-save table                               # list tables and their max values
+togf-save table  [--show-hints]               # list tables (--show-hints: entry counts and caps)
 togf-save table  NATIVE item.consumable       # index, offset, value, name
+togf-save table  NATIVE asbel.stat --show-hints --show-hidden
 togf-save table  NATIVE item.consumable --set 0=15 4=3
-togf-save table  NATIVE arte.asbel --set-all 9999
+togf-save table  NATIVE asbel.arte --set-all 9999
+togf-save table  NATIVE asbel.stat --set 2=80 --force   # write a read-only field
 
 togf-save shards --types                      # every shard type and nature with its number
 togf-save shards NATIVE [--all]               # used slots (--all: empty ones too)
@@ -130,8 +179,35 @@ togf-save encode SaveDat000                                      # -> SaveDat000
 - `encode` moves an existing output file to `.bak` the first time it overwrites it.
 - `-v` or `-vv` turns on logging, and `--lang` picks the language for names.
 
-Value limits: arte counts 0-9999, consumables 0-30, other items 0-15. Use `--set-all max` to
-set every entry in a table to its limit.
+`table` options:
+
+| Option | Effect |
+|---|---|
+| `--show-hints` | Adds hints at the end of each line, in one column. When listing tables, it adds entry counts and caps instead. |
+| `--show-hidden` | Also lists hidden fields (marked as hidden), such as unknown counters. |
+| `--force` | Lets `--set` and `--set-all` write read-only fields (marked as read-only). |
+
+Value limits:
+
+| Values | Limit |
+|---|---|
+| Arte counts | 0-9999 |
+| Consumables | 0-30 |
+| Other items | 0-15 |
+| Level | 0-200 |
+| HP, Max HP | 0-9999 |
+| Attack, Arte Attack, Accuracy, Defense, Arte Defense, Evasion | 0-1999 |
+| Combat counters | 0-9999 (u16) or 0-9999999 (u32) |
+
+`--set-all max` sets every bulk-editable entry in a table to its limit. Read-only ones also need
+`--force`. For battles fought together it is always refused.
+
+**Unlocking titles:** set an arte usage count or a combat counter at or above a title's
+threshold, then perform that action once in game. The character learns the title, if that
+character has it. When a title has several thresholds, every passed one is learned at once.
+For example, set Asbel's critical hits to 1500 and land one critical hit: he learns the 50, 300
+and 1500 critical-hit titles together. See
+[docs/character-block.md](docs/character-block.md#unlocking-titles).
 
 Slot 1 holds the load-menu summary and thumbnail. The CLI has no commands to read or edit it.
 To change it, edit `slot1.json` in the decoded folder by hand. `encode` uses the file as
@@ -167,12 +243,12 @@ browser.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/meta` | Languages, tables (with max values), shard types and natures |
+| GET | `/api/meta` | Languages, characters with their tables, other table groups (with max values and whether "set all" applies), shard types and natures |
 | POST | `/api/sessions` | Upload a `.sav` (multipart field `file`). Returns the session summary. |
 | GET / DELETE | `/api/sessions/{id}` | Session summary (layout, CRC status, warnings, modified) / close the session |
 | GET | `/api/sessions/{id}/download` | Re-encoded `.sav` |
 | GET | `/api/sessions/{id}/slot1` | Slot 1 JSON, read only |
-| GET / PATCH | `/api/sessions/{id}/tables/{table_id}` | Read rows / edit with `{"set": {index: value}}` or `{"set_all": value}`. A rejected edit changes nothing. |
+| GET / PATCH | `/api/sessions/{id}/tables/{table_id}` | Read rows, with flags and hints (`?show_hidden=true` adds hidden rows) / edit with `{"set": {index: value}}` or `{"set_all": value \| "max"}`, plus `"force": true` to write read-only fields. A rejected edit changes nothing. |
 | GET | `/api/sessions/{id}/shards` | All slots, used count, count mismatches |
 | PUT / DELETE | `/api/sessions/{id}/shards/{slot}` | Set a shard with `{"type", "nature", "strength"}` / empty a slot |
 | POST | `/api/sessions/{id}/shards/clear`, `.../fix-counts` | Empty every slot / make the per-type counts match the slots |
@@ -188,10 +264,21 @@ togf_save/
   crypto.py        AES key derivation, encrypt/decrypt
   container.py     slot layout, CRCs, backups
   codec.py         decode .sav -> SaveData, encode SaveData -> .sav
-  native/          NativeData (game state) field map and editor
+  native/          NativeData (game state)
+    layout/        field map: characters, items, misc, shards
+    editor.py      read and edit tables
+    shards.py      shard slots
   locales/         names and interface text per language
   cli.py           command line
+  logsetup.py      logging setup from LOG_* variables
   web/             FastAPI app + static frontend
+    routes/        API routes, one module per group
+docs/
+  character-block.md   per-character data map
+  items.md             item counts
+  misc.md              single values (gald) and values coming soon
+  shards.md            shard slots and per-type counts
+  unused-findings.md   data found but not mapped yet
 tests/
 ```
 
@@ -201,8 +288,8 @@ Each language is a folder in `togf_save/locales/` with two files:
 
 | File | Contents |
 |---|---|
-| `<lang>/names.json` | Data names by stable ID, such as `item.consumable.0` or `shard.type.1`. The field map never hard-codes names. |
-| `<lang>/ui.json` | Interface text shared by the CLI and the website (`str.format` templates), plus `language.name`. |
+| `<lang>/names.json` | Data names by stable ID, such as `item.consumable.0`, `asbel.arte.3` or `shard.type.1`, and names shared between characters, such as `stat.attack` or `section.stats`. The field map never hard-codes names. |
+| `<lang>/ui.json` | Interface text shared by the CLI and the website (`str.format` templates), plus `language.name` and the field hints (`hint.*`). |
 
 - **Languages:** `zh-Hant`, `en` and `ja`.
 - **Fallback:** a missing key falls back to `ja`, and then to the key itself. `ja` must have

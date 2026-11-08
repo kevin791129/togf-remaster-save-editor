@@ -50,7 +50,7 @@ def test_arte_offsets():
     """Offsets found by diffing saves, before the character block map existed."""
     found = {"asbel": 0x0762, "sophie": 0x133A, "hubert": 0x1F12, "cheria": 0x2AEA,
              "malik": 0x36C2, "pascal": 0x429A}
-    assert {t.id: t.offset for t in L.ARTES} == {f"arte.{c}": o for c, o in found.items()}
+    assert {t.id: t.offset for t in L.ARTES} == {f"{c}.arte": o for c, o in found.items()}
 
 
 def test_active_characters_have_arte_counts():
@@ -85,9 +85,9 @@ def test_field_table_hint_id():
 
 
 def test_int_table_flags_name_hint():
-    t = L.TABLES["arte.asbel"]
+    t = L.TABLES["asbel.arte"]
     assert t.flags_of(0) == L.Flag.SET_ALL
-    assert t.name_id(3) == t.entry_id(3) == "arte.asbel.3"
+    assert t.name_id(3) == t.entry_id(3) == "asbel.arte.3"
     assert t.hint_id(0) == "hint.usage_count"
     for method in (t.flags_of, t.hint_id):
         with pytest.raises(IndexError):
@@ -117,7 +117,7 @@ def test_items_are_ordered_and_contiguous_where_known():
 
 def test_get_set(native):
     native.set("item.consumable", 0, 15)
-    native.set("arte.asbel", 1, 0x1234)
+    native.set("asbel.arte", 1, 0x1234)
     assert native.get("item.consumable", 0) == 15
     assert native.data[0xA641] == 15
     assert native.data[0x0762 + 12:0x0762 + 14] == b"\x34\x12"  # u16 little-endian
@@ -138,7 +138,7 @@ def test_set_out_of_range(native, value):
         native.set("item.consumable", 0, value)
 
 
-@pytest.mark.parametrize("table_id,limit", [("arte.asbel", 9999), ("item.consumable", 30),
+@pytest.mark.parametrize("table_id,limit", [("asbel.arte", 9999), ("item.consumable", 30),
                                             ("item.dish", 15), ("item.material", 15),
                                             ("item.sellable", 15), ("item.ingredient", 15),
                                             ("misc", 9999999)])
@@ -179,7 +179,7 @@ def test_rows(native):
 
 
 def test_rows_hint(native):
-    assert native.rows("arte.asbel", "zh-Hant")[0]["hint"] == i18n.text("hint.usage_count", "zh-Hant") != ""
+    assert native.rows("asbel.arte", "zh-Hant")[0]["hint"] == i18n.text("hint.usage_count", "zh-Hant") != ""
 
 
 # --- flags in the editor (on a stand-in table, until real tables use them) ---
@@ -339,7 +339,7 @@ def test_numbers_continue_across_material_sellable_ingredient():
     assert material.number(0) == 1
     assert sellable.number(0) == material.number(material.count - 1) + 1 == 124
     assert ingredient.number(0) == sellable.number(sellable.count - 1) + 1 == 190
-    assert L.TABLES["item.dish"].number(0) == 1 and L.TABLES["arte.asbel"].number(0) == 1
+    assert L.TABLES["item.dish"].number(0) == 1 and L.TABLES["asbel.arte"].number(0) == 1
 
 
 def test_too_small():

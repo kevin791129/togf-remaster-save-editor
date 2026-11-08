@@ -40,11 +40,11 @@ def test_meta(client):
     m = client.get("/api/meta").json()
     assert m["default_lang"] == "zh-Hant" and "zh-Hant" in m["languages"]
     items = next(g for g in m["groups"] if g["id"] == "items")
-    assert {"id": "item.consumable", "name": "消耗品", "count": 35, "max": 30} in items["tables"]
+    assert {"id": "item.consumable", "name": "消耗品", "count": 35, "max": 30, "set_all": True} in items["tables"]
     assert m["shards"]["types"][0] == {"value": 1, "name": "攻擊碎片"}
     assert len(m["shards"]["natures"]) == L.SHARD_NATURES
     assert {"id": "misc", "name": "其他",
-            "tables": [{"id": "misc", "name": "其他", "count": 1, "max": None}]} in m["groups"]
+            "tables": [{"id": "misc", "name": "其他", "count": 1, "max": None, "set_all": True}]} in m["groups"]
     assert m["ui"]["group.items"] == "道具"
 
 
@@ -52,6 +52,20 @@ def test_meta_en(client):
     m = client.get("/api/meta", params={"lang": "en"}).json()
     assert m["ui"]["group.items"] == "Items" and m["groups"][1]["name"] == "Items"
     assert m["groups"][1]["tables"][0]["name"] == i18n.name("item.consumable", "en")
+
+
+def test_meta_characters(client):
+    m = client.get("/api/meta", params={"lang": "zh-Hant"}).json()
+    assert [c["id"] for c in m["characters"]] == list(L.ACTIVE_CHARACTERS)
+    asbel = m["characters"][0]
+    assert asbel["name"] == "艾斯貝爾"
+    assert [(t["section"], t["id"]) for t in asbel["tables"]] == [
+        ("stats", "asbel.stat"), ("artes", "asbel.arte"), ("counters", "asbel.counter"), ("together", "asbel.together")]
+    stats, artes, counters, together = asbel["tables"]
+    assert stats["name"] == i18n.name("section.stats", "zh-Hant") and stats["count"] == 11
+    assert artes["max"] == 9999 and counters["max"] is None
+    # stats: SET_ALL but read-only (offered, needs force); together: no SET_ALL at all
+    assert (stats["set_all"], artes["set_all"], counters["set_all"], together["set_all"]) == (True, True, True, False)
 
 
 def test_unknown_lang(client):
@@ -112,8 +126,8 @@ def test_edit_table(client, sid):
 
 
 def test_edit_table_set_all(client, sid):
-    client.patch(f"/api/sessions/{sid}/tables/arte.asbel", json={"set_all": 9999})
-    assert downloaded(client, sid).values("arte.asbel") == [9999] * 36
+    client.patch(f"/api/sessions/{sid}/tables/asbel.arte", json={"set_all": 9999})
+    assert downloaded(client, sid).values("asbel.arte") == [9999] * 36
 
 
 def test_edit_table_set_all_max(client, sid):
@@ -139,6 +153,71 @@ def test_edit_table_is_all_or_nothing(client, sid):
     r = client.patch(f"/api/sessions/{sid}/tables/item.dish", json={"set": {"0": 5, "1": 16}})
     assert r.status_code == 422 and "0-15" in r.json()["detail"]
     assert client.get(f"/api/sessions/{sid}/tables/item.dish").json()["rows"][0]["value"] == 0
+
+
+def _index(table_id, key):
+    t = L.TABLES[table_id]
+    return next(i for i in range(t.count) if t.entry_id(i) == f"{table_id}.{key}")
+
+
+def test_read_table_flags(client, sid):
+    t = client.get(f"/api/sessions/{sid}/tables/asbel.stat").json()
+    assert t["set_all"] and t["hint"] == ""
+    assert all(r["read_only"] and not r["hidden"] for r in t["rows"])
+    assert [r["set_all"] for r in t["rows"]].count(True) == 6
+
+
+def test_read_table_show_hidden(client, sid):
+    url = f"/api/sessions/{sid}/tables/asbel.counter"
+    rows = client.get(url).json()["rows"]
+    assert len(rows) == L.TABLES["asbel.counter"].count - 2 and not any(r["hidden"] for r in rows)
+    rows = client.get(url, params={"show_hidden": True}).json()["rows"]
+    assert len(rows) == L.TABLES["asbel.counter"].count
+    assert [r["id"] for r in rows if r["hidden"]] == ["asbel.counter.unknown_b28", "asbel.counter.unknown_b42"]
+
+
+def test_table_hint_once(client, sid):
+    artes = client.get(f"/api/sessions/{sid}/tables/asbel.arte").json()
+    assert artes["hint"] == i18n.text("hint.usage_count", "zh-Hant") != ""
+    assert all(r["hint"] == "" for r in artes["rows"])  # same as the table's: not repeated
+
+    stats = client.get(f"/api/sessions/{sid}/tables/asbel.stat").json()
+    hints = {r["id"]: r["hint"] for r in stats["rows"]}
+    assert hints["asbel.stat.level"] == i18n.text("hint.linked_exp", "zh-Hant")
+    assert hints["asbel.stat.attack"] == ""
+
+    together = client.get(f"/api/sessions/{sid}/tables/asbel.together").json()
+    assert together["hint"] and not together["set_all"] and all(r["hint"] == "" for r in together["rows"])
+
+
+def test_edit_read_only_needs_force(client, sid):
+    url = f"/api/sessions/{sid}/tables/asbel.stat"
+    level = _index("asbel.stat", "level")
+    r = client.patch(url, json={"set": {str(level): 50}})
+    assert r.status_code == 422 and "read-only" in r.json()["detail"]
+    assert not client.get(f"/api/sessions/{sid}").json()["modified"]
+    r = client.patch(url, json={"set": {str(level): 50}, "force": True})
+    assert r.status_code == 200
+    assert downloaded(client, sid).get("asbel.stat", level) == 50
+
+
+def test_edit_set_all_read_only_needs_force(client, sid):
+    url = f"/api/sessions/{sid}/tables/asbel.stat"
+    assert client.patch(url, json={"set_all": "max"}).status_code == 422
+    r = client.patch(url, json={"set_all": "max", "force": True})
+    values = {row["id"]: row["value"] for row in r.json()["rows"]}
+    assert values["asbel.stat.attack"] == 1999 and values["asbel.stat.level"] == 0
+
+
+def test_edit_set_all_skips_hidden_counters(client, sid):
+    r = client.patch(f"/api/sessions/{sid}/tables/asbel.counter", json={"set_all": "max"}, params={"show_hidden": True})
+    values = {row["id"]: row["value"] for row in r.json()["rows"]}
+    assert values["asbel.counter.enemies_defeated"] == 9999999 and values["asbel.counter.unknown_b28"] == 0
+
+
+def test_edit_together_set_all_refused(client, sid):
+    r = client.patch(f"/api/sessions/{sid}/tables/asbel.together", json={"set_all": 1, "force": True})
+    assert r.status_code == 422 and "no entries" in r.json()["detail"]
 
 
 def test_unknown_table(client, sid):

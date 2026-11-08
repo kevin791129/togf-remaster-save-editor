@@ -17,7 +17,7 @@ from ..errors import ReadOnlyError, SaveError
 from . import layout as L
 from .shards import Shard, ShardSlots
 
-__all__ = ["NativeData", "Shard", "table", "set_all_indexes"]
+__all__ = ["NativeData", "Shard", "table", "set_all_indexes", "has_set_all"]
 
 
 def table(table_id: str) -> L.IntTable | L.FieldTable:
@@ -31,6 +31,12 @@ def set_all_indexes(t: L.IntTable | L.FieldTable, force: bool = False) -> list[i
     """Indexes that set_all / set_all_max write: SET_ALL entries, minus READ_ONLY ones unless forced."""
     return [i for i in range(t.count)
             if t.flags_of(i) & L.Flag.SET_ALL and (force or not t.flags_of(i) & L.Flag.READ_ONLY)]
+
+
+def has_set_all(t: L.IntTable | L.FieldTable) -> bool:
+    """Whether to offer "set all" for the table: some visible (not HIDDEN) entry is SET_ALL.
+    It may still need force, if those entries are READ_ONLY."""
+    return any(t.flags_of(i) & L.Flag.SET_ALL and not t.flags_of(i) & L.Flag.HIDDEN for i in range(t.count))
 
 
 class NativeData(ShardSlots):

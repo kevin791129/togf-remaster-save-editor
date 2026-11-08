@@ -4,7 +4,8 @@ Block base = CHAR_BASE + index * CHAR_STRIDE, index in CHARACTERS order. Offsets
 a block (REL below) are the same for every character. Full map and notes on each
 field: docs/character-block.md.
 
-Sections per character (CHARACTER_SECTIONS): stats, artes, counters, together.
+Sections per character (CHARACTER_SECTIONS): stats, artes, counters, together, with
+table ids "<character>.<table>" (asbel.stat, asbel.arte, asbel.counter, asbel.together).
 Field names are shared between characters through name_key ("stat.attack", ...).
 """
 from .types import Field, FieldTable, Flag, IntTable
@@ -60,7 +61,7 @@ STAT_SPEC = (
 
 
 def _stats(character: str) -> FieldTable:
-    return FieldTable(f"stat.{character}", _fields(character, "stat", STAT_SPEC), name_key="section.stats",
+    return FieldTable(f"{character}.stat", _fields(character, "stat", STAT_SPEC), name_key="section.stats",
                       flags=RO)
 
 
@@ -81,7 +82,7 @@ ARTE_COUNTS = {
 
 def _artes(character: str) -> IntTable:
     # name_key becomes "section.artes" once the frontend lists tables per character (step 11)
-    return IntTable(f"arte.{character}", char_offset(character, ARTE_REL), ARTE_COUNTS[character],
+    return IntTable(f"{character}.arte", char_offset(character, ARTE_REL), ARTE_COUNTS[character],
                     size=2, stride=ARTE_STRIDE, name_key=f"character.{character}", limit=ARTE_LIMIT,
                     flags=SET_ALL, hint_key="hint.usage_count")
 
@@ -131,7 +132,7 @@ COUNTER_SPEC = (
 
 
 def _counters(character: str) -> FieldTable:
-    return FieldTable(f"counter.{character}", _fields(character, "counter", COUNTER_SPEC, COUNTER_LIMITS),
+    return FieldTable(f"{character}.counter", _fields(character, "counter", COUNTER_SPEC, COUNTER_LIMITS),
                       name_key="section.counters")
 
 
@@ -144,7 +145,7 @@ def _together(character: str) -> FieldTable:
                          name_key=f"character.{partner}",
                          flags=HIDDEN if partner == character else Flag.NONE)
                    for j, partner in enumerate(CHARACTERS))
-    return FieldTable(f"together.{character}", fields, name_key="section.together",
+    return FieldTable(f"{character}.together", fields, name_key="section.together",
                       flags=RO, hint_key="hint.pair")
 
 
@@ -154,8 +155,8 @@ COUNTERS = tuple(_counters(c) for c in ACTIVE_CHARACTERS)
 TOGETHER = tuple(_together(c) for c in ACTIVE_CHARACTERS)
 
 SECTIONS = ("stats", "artes", "counters", "together")  # names: "section.<id>"
-# {character: {section: table id}} for the active characters
+# {character: {section: table id}} for the active characters; table ids are "<character>.<table>"
 CHARACTER_SECTIONS: dict[str, dict[str, str]] = {
-    c: {"stats": f"stat.{c}", "artes": f"arte.{c}", "counters": f"counter.{c}", "together": f"together.{c}"}
+    c: {"stats": f"{c}.stat", "artes": f"{c}.arte", "counters": f"{c}.counter", "together": f"{c}.together"}
     for c in ACTIVE_CHARACTERS
 }

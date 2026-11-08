@@ -8,12 +8,12 @@ Output text comes from togf_save/locales/<lang>/ui.json (--lang, or $DEFAULT_LAN
 import argparse
 import os
 import sys
+import unicodedata
 from pathlib import Path
 
 from dotenv import load_dotenv
-from loguru import logger
 
-from . import container, i18n
+from . import container, i18n, logsetup
 from .codec import read_save, write_save
 from .errors import SaveError
 from .folder import export_folder, import_folder
@@ -26,10 +26,7 @@ def _setup(verbose: int) -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):  # not a TextIOWrapper (e.g. redirected in tests)
             pass
-    logger.remove()
-    if verbose:
-        logger.add(sys.stderr, level="DEBUG" if verbose > 1 else "INFO", format="<level>{level: <7}</level> {message}")
-        logger.enable("togf_save")
+    logsetup.setup(verbose)
 
 
 def _t(a, key: str, **values) -> str:
@@ -91,37 +88,91 @@ def cmd_encode(a) -> None:
     print(_t(a, "common.wrote", path=out))
 
 
+HINT_SEP = "  # "
+
+
+def display_width(text: str) -> int:
+    """Terminal columns of `text`: wide (CJK) characters take two."""
+    return sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in text)
+
+
+def _print_aligned(lines: list[tuple[str, str]], sep: str) -> None:
+    """Print (text, extra) pairs; every non-empty extra starts in the same column, after `sep`."""
+    column = max((display_width(text) for text, extra in lines if extra), default=0)
+    for text, extra in lines:
+        print(text + " " * (column - display_width(text)) + sep + extra if extra else text)
+
+
+def _summary(a, tid: str) -> str:
+    t = get_table(tid)
+    if not a.show_hints:
+        return ""
+    return (_t(a, "table.summary_count", count=t.count) if t.max_value is None
+            else _t(a, "table.summary", count=t.count, max=t.max_value))
+
+
+def _print_table_list(a) -> None:
+    """Characters with their sections, then the other groups (minus tables already listed).
+    Entry counts and caps only with --show-hints, aligned."""
+    listed = {tid for sections in L.CHARACTER_SECTIONS.values() for tid in sections.values()}
+    lines = [(_t(a, "group.characters"), "")]
+    for character, sections in L.CHARACTER_SECTIONS.items():
+        lines.append((f"  {i18n.name(f'character.{character}', a.lang)}", ""))
+        for section, tid in sections.items():
+            lines.append((f"    {tid:<18} {i18n.name(f'section.{section}', a.lang)}", _summary(a, tid)))
+    for group, ids in L.GROUPS.items():
+        ids = [tid for tid in ids if tid not in listed]
+        if ids:
+            lines.append((_t(a, f"group.{group}"), ""))
+            for tid in ids:
+                lines.append((f"  {tid:<18} {i18n.name(get_table(tid).name_key or tid, a.lang)}", _summary(a, tid)))
+    _print_aligned(lines, "  ")
+
+
+def _print_rows(a, native: NativeData) -> None:
+    """A header line `table id  name`, then rows `index offset value name [flags]`.
+    With --show-hints, a hint shared by the whole table ends the header line and any
+    other hint ends its row's line, all hints starting in the same column."""
+    t = get_table(a.table_id)
+    rows = native.rows(t.id, a.lang, show_hidden=a.show_hidden)
+    width = max([5] + [len(str(r["value"])) for r in rows])
+    lines = [(f"{t.id}  {i18n.name(t.name_key or t.id, a.lang)}",
+              i18n.text(t.hint_key, a.lang) if t.hint_key else "")]
+    for r in rows:
+        line = f"{r['index']:4}  {r['offset']:#07x}  {r['value']:>{width}}  {r['name']}"
+        line += "".join(f" [{_t(a, f'table.flag.{flag}')}]" for flag in ("read_only", "hidden") if r[flag])
+        lines.append((line, r["hint"] if t.hint_id(r["index"]) != t.hint_key else ""))
+    if not a.show_hints:
+        lines = [(line, "") for line, _ in lines]
+    _print_aligned(lines, HINT_SEP)
+
+
 def cmd_table(a) -> None:
     if not a.table_id:
         if a.native in L.TABLES:  # `table item.dish`: the id landed in the optional NATIVE slot
             raise SaveError(_t(a, "table.native_first", table=a.native))
         if a.set or a.set_all is not None:
             raise SaveError(_t(a, "table.need_id"))
-        for group, ids in L.GROUPS.items():
-            print(_t(a, f"group.{group}"))
-            for tid in ids:
-                t = get_table(tid)
-                summary = (_t(a, "table.summary_count", count=t.count) if t.max_value is None
-                           else _t(a, "table.summary", count=t.count, max=t.max_value))
-                print(f"  {tid:<18} {i18n.name(t.name_key or tid, a.lang)}  {summary}")
+        _print_table_list(a)
         return
 
     t = get_table(a.table_id)
     native = _load_native(a)
     if not a.set and a.set_all is None:
-        for row in native.rows(a.table_id, a.lang):
-            print(f"{row['index']:4}  {row['offset']:#07x}  {row['value']:>5}  {row['name']}")
+        _print_rows(a, native)
         return
 
-    if a.set_all is not None:
-        edits = [(i, t.max_of(i) if a.set_all == "max" else a.set_all) for i in range(t.count)]
+    before = native.values(t.id)
+    if a.set_all == "max":
+        native.set_all_max(t.id, force=a.force)  # SET_ALL entries only; READ_ONLY ones with --force
+    elif a.set_all is not None:
+        native.set_all(t.id, a.set_all, force=a.force)
     else:
-        edits = a.set
-    for index, value in edits:
-        old = native.get(a.table_id, index)
-        native.set(a.table_id, index, value)
-        if old != value:
-            print(f"{t.entry_id(index)}  {i18n.name(t.entry_id(index), a.lang)}: {old} -> {value}")
+        for index, value in a.set:
+            native.set(t.id, index, value, force=a.force)
+    for i, (old, new) in enumerate(zip(before, native.values(t.id))):
+        if old != new:
+            print(f"{t.entry_id(i)}  {i18n.name(t.name_id(i), a.lang)}: {old} -> {new}")
     _write_native(a, native)
 
 
@@ -181,9 +232,7 @@ def cmd_serve(a) -> None:
 
     from .web.app import create_app
 
-    logger.enable("togf_save")
-    if not a.verbose:
-        logger.add(sys.stderr, level="INFO", format="<level>{level: <7}</level> {message}")
+    logsetup.setup(a.verbose, console=True)
     print(_t(a, "serve.banner", url=f"http://{a.host}:{a.port}"))
     uvicorn.run(create_app(), host=a.host, port=a.port)
 
@@ -236,12 +285,18 @@ def build_parser() -> argparse.ArgumentParser:
                    help="default: DIR.sav (an existing file is moved to .bak the first time)")
     p.set_defaults(func=cmd_encode)
 
-    p = sub.add_parser("table", parents=[common, edit], help="list or edit arte / item / misc values in NativeData.bin")
-    p.add_argument("table_id", metavar="TABLE_ID", nargs="?", help="e.g. item.consumable; omit to list tables")
+    p = sub.add_parser("table", parents=[common, edit],
+                       help="list or edit character / item / misc values in NativeData.bin")
+    p.add_argument("table_id", metavar="TABLE_ID", nargs="?",
+                   help="e.g. item.consumable, asbel.stat; omit to list tables")
     g = p.add_mutually_exclusive_group()
     g.add_argument("--set", nargs="+", type=_index_value, metavar="INDEX=VALUE", help="set entries")
     g.add_argument("--set-all", type=_value_or_max, metavar="VALUE|max",
-                   help="set every entry to VALUE, or to the table's max")
+                   help="set every bulk-editable entry to VALUE, or to its own max")
+    p.add_argument("--show-hidden", action="store_true", help="also list hidden entries")
+    p.add_argument("--show-hints", action="store_true",
+                   help="show hints at the end of the lines (and entry counts / caps when listing tables)")
+    p.add_argument("--force", action="store_true", help="also write read-only entries")
     p.set_defaults(func=cmd_table)
 
     p = sub.add_parser("shards", parents=[common, edit], help="list or edit shards in NativeData.bin")
@@ -268,8 +323,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     a = build_parser().parse_args(argv)
-    _setup(a.verbose)
     try:
+        _setup(a.verbose)  # inside: a bad LOG_* value is reported like any other error
         a.func(a)
     except (SaveError, ValueError, IndexError, OSError) as e:
         print(_t(a, "common.error", message=e), file=sys.stderr)

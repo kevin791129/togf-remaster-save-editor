@@ -41,21 +41,21 @@ def test_tables_stay_in_their_block(character):
 
 
 @pytest.mark.parametrize("table_id,key,offset,fmt", [
-    ("stat.asbel", "exp", 0x84, "<I"),
-    ("stat.asbel", "next", 0x88, "<I"),
-    ("stat.asbel", "level", 0x8C, "<H"),
-    ("stat.asbel", "hp", 0x9C, "<I"),
-    ("stat.asbel", "attack", 0xA4, "<f"),
-    ("stat.asbel", "evasion", 0xB8, "<f"),
-    ("stat.asbel", "max_hp", 0xBC, "<f"),
-    ("stat.sophie", "attack", 0x84 + 0xBD8 + 0x20, "<f"),
-    ("counter.pascal", "combo_15", 0x84 + 5 * 0xBD8 + 0xB14, "<H"),
-    ("counter.pascal", "enemies_defeated", 0x84 + 5 * 0xBD8 + 0xB1C, "<I"),
-    ("counter.pascal", "damage_received", 0x84 + 5 * 0xBD8 + 0xB34, "<I"),
-    ("counter.pascal", "quick_battles", 0x84 + 5 * 0xBD8 + 0xB38, "<H"),
-    ("counter.pascal", "dishes_cooked", 0x84 + 5 * 0xBD8 + 0xB60, "<H"),
-    ("together.asbel", "asbel", 0x84 + 0xB62, "<H"),
-    ("together.pascal", "richard", 0x84 + 5 * 0xBD8 + 0xB62 + 12, "<H"),
+    ("asbel.stat", "exp", 0x84, "<I"),
+    ("asbel.stat", "next", 0x88, "<I"),
+    ("asbel.stat", "level", 0x8C, "<H"),
+    ("asbel.stat", "hp", 0x9C, "<I"),
+    ("asbel.stat", "attack", 0xA4, "<f"),
+    ("asbel.stat", "evasion", 0xB8, "<f"),
+    ("asbel.stat", "max_hp", 0xBC, "<f"),
+    ("sophie.stat", "attack", 0x84 + 0xBD8 + 0x20, "<f"),
+    ("pascal.counter", "combo_15", 0x84 + 5 * 0xBD8 + 0xB14, "<H"),
+    ("pascal.counter", "enemies_defeated", 0x84 + 5 * 0xBD8 + 0xB1C, "<I"),
+    ("pascal.counter", "damage_received", 0x84 + 5 * 0xBD8 + 0xB34, "<I"),
+    ("pascal.counter", "quick_battles", 0x84 + 5 * 0xBD8 + 0xB38, "<H"),
+    ("pascal.counter", "dishes_cooked", 0x84 + 5 * 0xBD8 + 0xB60, "<H"),
+    ("asbel.together", "asbel", 0x84 + 0xB62, "<H"),
+    ("pascal.together", "richard", 0x84 + 5 * 0xBD8 + 0xB62 + 12, "<H"),
 ])
 def test_offsets(table_id, key, offset, fmt):
     t = L.TABLES[table_id]
@@ -64,22 +64,22 @@ def test_offsets(table_id, key, offset, fmt):
 
 
 def test_counters_are_contiguous():
-    t = L.TABLES["counter.asbel"]
+    t = L.TABLES["asbel.counter"]
     ends = [t.offset_of(i) + struct.calcsize(t.fmt_of(i)) for i in range(t.count)]
     assert [t.offset_of(i) for i in range(1, t.count)] == ends[:-1]
     assert t.offset_of(0) == BLOCK["asbel"] + 0xB14 and t.end == BLOCK["asbel"] + 0xB62
-    assert t.end == L.TABLES["together.asbel"].offset_of(0)
+    assert t.end == L.TABLES["asbel.together"].offset_of(0)
 
 
 @pytest.mark.parametrize("key,limit", [("level", 200), ("hp", 9999), ("max_hp", 9999), ("attack", 1999),
                                        ("arte_attack", 1999), ("accuracy", 1999), ("defense", 1999),
                                        ("arte_defense", 1999), ("evasion", 1999)])
 def test_stat_limits(key, limit):
-    assert L.TABLES["stat.cheria"].max_of(_index("stat.cheria", key)) == limit
+    assert L.TABLES["cheria.stat"].max_of(_index("cheria.stat", key)) == limit
 
 
 def test_stat_flags():
-    t = L.TABLES["stat.asbel"]
+    t = L.TABLES["asbel.stat"]
     flags = {t.field(i).key: t.flags_of(i) for i in range(t.count)}
     assert all(f & F.READ_ONLY for f in flags.values())
     assert {k for k, f in flags.items() if f & F.SET_ALL} == {
@@ -89,7 +89,7 @@ def test_stat_flags():
 
 
 def test_counter_flags():
-    t = L.TABLES["counter.malik"]
+    t = L.TABLES["malik.counter"]
     flags = {t.field(i).key: t.flags_of(i) for i in range(t.count)}
     hidden = {k for k, f in flags.items() if f & F.HIDDEN}
     assert hidden == {"unknown_b28", "unknown_b42"}
@@ -98,20 +98,20 @@ def test_counter_flags():
 
 
 def test_counter_limits():
-    t = L.TABLES["counter.asbel"]
+    t = L.TABLES["asbel.counter"]
     for i in range(t.count):
         assert t.max_of(i) == {2: 9999, 4: 9999999}[t.field(i).size], t.entry_id(i)
 
 
 def test_counter_set_all_max(native):
-    native.set_all_max("counter.asbel")
-    assert native.get("counter.asbel", _index("counter.asbel", "enemies_defeated")) == 9999999
-    assert native.get("counter.asbel", _index("counter.asbel", "items_stolen")) == 9999
-    assert native.get("counter.asbel", _index("counter.asbel", "unknown_b28")) == 0
+    native.set_all_max("asbel.counter")
+    assert native.get("asbel.counter", _index("asbel.counter", "enemies_defeated")) == 9999999
+    assert native.get("asbel.counter", _index("asbel.counter", "items_stolen")) == 9999
+    assert native.get("asbel.counter", _index("asbel.counter", "unknown_b28")) == 0
 
 
 def test_together_flags():
-    t = L.TABLES["together.hubert"]
+    t = L.TABLES["hubert.together"]
     assert t.count == len(L.CHARACTERS)  # Richard's column included
     assert all(t.flags_of(i) & F.READ_ONLY and not t.flags_of(i) & F.SET_ALL for i in range(t.count))
     assert [t.field(i).key for i in range(t.count) if t.flags_of(i) & F.HIDDEN] == ["hubert"]
@@ -119,15 +119,15 @@ def test_together_flags():
 
 
 @pytest.mark.parametrize("table_id,key,hint", [
-    ("stat.asbel", "exp", "hint.linked_exp"),
-    ("stat.asbel", "level", "hint.linked_exp"),
-    ("stat.asbel", "hp", "hint.linked_hp"),
-    ("stat.asbel", "max_hp", "hint.linked_hp"),
-    ("stat.asbel", "attack", ""),
-    ("counter.asbel", "combo_100", "hint.combo_tier"),
-    ("counter.asbel", "defended_seal", "hint.status_defended"),
-    ("counter.asbel", "critical_hits", ""),
-    ("together.asbel", "sophie", "hint.pair"),
+    ("asbel.stat", "exp", "hint.linked_exp"),
+    ("asbel.stat", "level", "hint.linked_exp"),
+    ("asbel.stat", "hp", "hint.linked_hp"),
+    ("asbel.stat", "max_hp", "hint.linked_hp"),
+    ("asbel.stat", "attack", ""),
+    ("asbel.counter", "combo_100", "hint.combo_tier"),
+    ("asbel.counter", "defended_seal", "hint.status_defended"),
+    ("asbel.counter", "critical_hits", ""),
+    ("asbel.together", "sophie", "hint.pair"),
 ])
 def test_hints(table_id, key, hint):
     assert L.TABLES[table_id].hint_id(_index(table_id, key)) == hint
@@ -136,7 +136,7 @@ def test_hints(table_id, key, hint):
 def test_names_are_shared_between_characters():
     for section, key, name_key in (("stat", "attack", "stat.attack"), ("counter", "items_stolen", "counter.items_stolen"),
                                    ("together", "richard", "character.richard")):
-        ids = {L.TABLES[f"{section}.{c}"].name_id(_index(f"{section}.{c}", key)) for c in L.ACTIVE_CHARACTERS}
+        ids = {L.TABLES[f"{c}.{section}"].name_id(_index(f"{c}.{section}", key)) for c in L.ACTIVE_CHARACTERS}
         assert ids == {name_key}
 
 
@@ -158,44 +158,44 @@ def test_every_name_and_hint_is_translated():
 
 def test_stat_set_all_max_touches_the_six_stats(native):
     with pytest.raises(ValueError, match="no entries"):
-        native.set_all_max("stat.asbel")  # all read-only: needs force
-    native.set_all_max("stat.asbel", force=True)
-    t = L.TABLES["stat.asbel"]
-    values = {t.field(i).key: native.get("stat.asbel", i) for i in range(t.count)}
+        native.set_all_max("asbel.stat")  # all read-only: needs force
+    native.set_all_max("asbel.stat", force=True)
+    t = L.TABLES["asbel.stat"]
+    values = {t.field(i).key: native.get("asbel.stat", i) for i in range(t.count)}
     assert values == {"exp": 0, "next": 0, "level": 0, "hp": 0, "attack": 1999, "arte_attack": 1999,
                       "accuracy": 1999, "defense": 1999, "arte_defense": 1999, "evasion": 1999, "max_hp": 0}
     assert native.data[0xA4:0xA8] == struct.pack("<f", 1999.0)
 
 
 def test_stat_read_only_needs_force(native):
-    level = _index("stat.asbel", "level")
+    level = _index("asbel.stat", "level")
     for key in ("level", "attack"):
         with pytest.raises(ReadOnlyError):
-            native.set("stat.asbel", _index("stat.asbel", key), 50)
-    native.set("stat.asbel", level, 200, force=True)
+            native.set("asbel.stat", _index("asbel.stat", key), 50)
+    native.set("asbel.stat", level, 200, force=True)
     assert native.data[0x8C:0x8E] == (200).to_bytes(2, "little")
     with pytest.raises(ValueError, match="0-200"):
-        native.set("stat.asbel", level, 201, force=True)
+        native.set("asbel.stat", level, 201, force=True)
 
 
 def test_counter_set_all_skips_unknowns(native):
-    native.set_all("counter.sophie", 7)
-    t = L.TABLES["counter.sophie"]
+    native.set_all("sophie.counter", 7)
+    t = L.TABLES["sophie.counter"]
     for i in range(t.count):
-        assert native.get("counter.sophie", i) == (0 if t.field(i).key.startswith("unknown") else 7)
+        assert native.get("sophie.counter", i) == (0 if t.field(i).key.startswith("unknown") else 7)
 
 
 def test_counter_rows_hide_unknowns(native):
-    keys = [r["id"] for r in native.rows("counter.asbel")]
-    assert "counter.asbel.unknown_b28" not in keys and len(keys) == L.TABLES["counter.asbel"].count - 2
-    assert len(native.rows("counter.asbel", show_hidden=True)) == L.TABLES["counter.asbel"].count
+    keys = [r["id"] for r in native.rows("asbel.counter")]
+    assert "asbel.counter.unknown_b28" not in keys and len(keys) == L.TABLES["asbel.counter"].count - 2
+    assert len(native.rows("asbel.counter", show_hidden=True)) == L.TABLES["asbel.counter"].count
 
 
 def test_together_rows(native):
-    native.set("together.asbel", _index("together.asbel", "pascal"), 477, force=True)
-    rows = native.rows("together.asbel", "en")
+    native.set("asbel.together", _index("asbel.together", "pascal"), 477, force=True)
+    rows = native.rows("asbel.together", "en")
     assert [r["name"] for r in rows] == [i18n.name(f"character.{c}", "en") for c in L.CHARACTERS if c != "asbel"]
     assert all(r["read_only"] and r["hint"] for r in rows)
-    assert next(r for r in rows if r["id"] == "together.asbel.pascal")["value"] == 477
+    assert next(r for r in rows if r["id"] == "asbel.together.pascal")["value"] == 477
     with pytest.raises(ValueError, match="no entries"):
-        native.set_all_max("together.asbel", force=True)
+        native.set_all_max("asbel.together", force=True)

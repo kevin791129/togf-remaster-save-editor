@@ -9,6 +9,9 @@ SaveDat*/
 # Local settings
 .env
 
+# Logs
+logs/
+
 # Python
 .venv/
 __pycache__/

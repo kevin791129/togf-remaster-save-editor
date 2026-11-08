@@ -5,6 +5,7 @@
   "group.items": "道具",
   "group.shards": "碎片",
   "group.misc": "其他",
+  "group.characters": "角色",
 
   "shard.field.type": "種類",
   "shard.field.nature": "性質",
@@ -41,6 +42,8 @@
   "table.summary_count": "（{count} 項）",
   "table.need_id": "請指定要編輯的 TABLE_ID",
   "table.native_first": "請在 {table} 之前指定 NATIVE 檔案",
+  "table.flag.read_only": "唯讀",
+  "table.flag.hidden": "隱藏",
   "native.missing": "請指定 NATIVE 檔案（slot2.NativeData.bin）",
 
   "shards.cleared": "已清空欄位 {slot}",
