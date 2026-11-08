@@ -2,6 +2,7 @@
   --bg: #f6f7f9;
   --surface: #ffffff;
   --surface-2: #eef0f4;
+  --row-alt: #f7f8fb;
   --text: #1c1f26;
   --muted: #646b7a;
   --border: #d9dde5;
@@ -9,11 +10,14 @@
   --accent-text: #ffffff;
   --warn-bg: #fff4d6;
   --warn-text: #6b4e00;
+  --warn-border: #d9a400;
   --error-bg: #fde4e4;
   --error-text: #8a1c1c;
   --ok: #1d7a46;
   --flash: #dff5e7;
   --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --control-h: 30px;  /* inputs and read-only values share it, so rows keep their height */
+  --value-w: 7em;
   color-scheme: light;
 }
 
@@ -22,6 +26,7 @@
     --bg: #14161b;
     --surface: #1c1f26;
     --surface-2: #262a33;
+    --row-alt: #21242c;
     --text: #e6e8ee;
     --muted: #9aa1b1;
     --border: #333845;
@@ -29,6 +34,7 @@
     --accent-text: #0e1320;
     --warn-bg: #3b3115;
     --warn-text: #f3d98a;
+    --warn-border: #b38a1a;
     --error-bg: #3d1b1b;
     --error-text: #f4b3b3;
     --ok: #5fd08e;
@@ -38,6 +44,9 @@
 }
 
 * { box-sizing: border-box; }
+
+/* always reserve the scrollbar's width, so the page doesn't shift between short and long tabs */
+html { scrollbar-gutter: stable; }
 
 body {
   margin: 0;
@@ -67,6 +76,15 @@ body {
   background: var(--warn-bg); color: var(--warn-text);
 }
 
+/* --- global options strip --- */
+.strip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px;
+  padding: 6px 16px; background: var(--surface-2); border-bottom: 1px solid var(--border);
+}
+.strip label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; }
+.strip-warn { color: var(--warn-text); visibility: hidden; }  /* takes its space even when not shown */
+.strip-warn.on { visibility: visible; }
+
 /* --- controls --- */
 .button, button, select, input {
   font: inherit; color: inherit;
@@ -78,16 +96,18 @@ body {
 }
 .button:hover, button:hover { border-color: var(--accent); }
 .button.primary, button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-button:disabled { opacity: .5; cursor: default; }
+button:disabled { opacity: .5; cursor: not-allowed; }
 select, input[type=text], input[type=number] {
   padding: 4px 8px; border-radius: 6px;
   background: var(--surface); border: 1px solid var(--border);
 }
-input[type=number] { width: 7em; text-align: right; }
-input:focus-visible, select:focus-visible, button:focus-visible, .button:focus-within {
+input[type=number] { width: var(--value-w); height: var(--control-h); text-align: right; }
+input:focus-visible, select:focus-visible, button:focus-visible, .button:focus-within, .info:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
 input.invalid { border-color: var(--error-text); background: var(--error-bg); }
+/* forced edit of a read-only field: inset ring instead of a thicker border, so the size doesn't change */
+input.forced { border-color: var(--warn-border); box-shadow: inset 0 0 0 1px var(--warn-border); background: var(--warn-bg); }
 
 /* --- tabs --- */
 .tabs, .subtabs {
@@ -102,6 +122,22 @@ input.invalid { border-color: var(--error-text); background: var(--error-bg); }
   color: var(--text); border-bottom-color: var(--accent); font-weight: 600;
 }
 .subtabs { background: none; padding: 0; margin-bottom: 12px; }
+
+/* --- characters: sidebar (a dropdown on narrow screens) + content --- */
+.split { display: flex; gap: 16px; align-items: flex-start; }
+.split > .content { flex: 1; min-width: 0; }
+.side {
+  flex: 0 0 9.5em; display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px;
+}
+.side button {
+  justify-content: flex-start; border: none; border-left: 3px solid transparent; border-radius: 4px;
+  background: none; color: var(--muted);
+}
+.side button[aria-selected=true] {
+  color: var(--text); font-weight: 600; border-left-color: var(--accent); background: var(--surface-2);
+}
+.side-select { display: none; width: 100%; margin-bottom: 10px; }
 
 /* --- content --- */
 main { padding: 16px; max-width: 1100px; margin: 0 auto; }
@@ -120,23 +156,51 @@ table { border-collapse: collapse; width: 100%; }
 th, td { padding: 4px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
 th { font-weight: 600; color: var(--muted); background: var(--surface-2); position: sticky; top: 0; }
 tr:last-child td { border-bottom: none; }
+/* alternating rows, counting only rows the filter shows */
+tbody tr:nth-child(even of :not([hidden])) td { background: var(--row-alt); }
 
 /* editable tables: fixed column widths so they don't shift between tabs or with content */
 table.fixed { table-layout: fixed; min-width: 560px; }
-table.fixed td { overflow: hidden; text-overflow: ellipsis; }
+table.fixed td { overflow: hidden; text-overflow: ellipsis; height: calc(var(--control-h) + 9px); }
 table.fixed select { width: 100%; }
 col.c-index { width: 5em; }
 col.c-offset { width: 8em; }
-col.c-value { width: 9em; }
+col.c-value { width: 10.5em; }
 col.c-action { width: 8.5em; }
 table.fixed td.action { overflow: visible; }
 td.num, th.num { text-align: right; }
 td.mono, .mono { font-family: var(--mono); }
 td.unknown { color: var(--muted); font-family: var(--mono); }
 tr.flash td { animation: flash 1s ease-out; }
-@keyframes flash { from { background: var(--flash); } to { background: transparent; } }
+@keyframes flash { from { background: var(--flash); } }
 .ok { color: var(--ok); }
 .bad { color: var(--error-text); font-weight: 600; }
+
+/* value cell: input or read-only text, then a fixed slot for the lock icon */
+.value { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.value .text {
+  display: inline-flex; align-items: center; justify-content: flex-end;
+  width: var(--value-w); height: var(--control-h); padding: 0 9px;
+}
+.value .lock { display: inline-block; width: 1.3em; text-align: center; font-size: 12px; }
+
+/* hidden rows (shown with "show hidden") */
+tr.hidden-row td { color: var(--muted); font-style: italic; }
+.tag {
+  font-size: 11px; font-style: normal; padding: 0 6px; margin-left: 6px; border-radius: 8px;
+  border: 1px solid var(--border); color: var(--muted); vertical-align: 1px;
+}
+
+/* hints: an ⓘ that shows a tooltip on hover or keyboard focus */
+.info {
+  display: inline-flex; width: 16px; height: 16px; margin-left: 6px; border-radius: 50%;
+  justify-content: center; align-items: center; font-size: 11px; font-style: normal; line-height: 1;
+  color: var(--muted); border: 1px solid var(--border); cursor: help; vertical-align: 1px;
+}
+.tip {
+  position: fixed; z-index: 50; max-width: 22em; padding: 6px 10px; border-radius: 6px; font-size: 12px;
+  background: var(--text); color: var(--bg); box-shadow: 0 4px 16px rgb(0 0 0 / .25); pointer-events: none;
+}
 
 pre.json {
   margin: 0; padding: 12px; overflow-x: auto;
@@ -154,7 +218,12 @@ pre.json {
 .toast.error { background: var(--error-text); color: var(--surface); }
 
 @media (max-width: 600px) {
+  :root { --value-w: 5.5em; }
   main { padding: 12px; }
   .bar h1 { width: 100%; }
-  input[type=number] { width: 5.5em; }
+  .toolbar > * { flex: 1 1 100%; }
+  .toolbar .spacer { display: none; }
+  .split { display: block; }
+  .side { display: none; }
+  .side-select { display: block; }
 }

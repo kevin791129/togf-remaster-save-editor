@@ -15,6 +15,12 @@ def default_lang(monkeypatch):
     monkeypatch.setenv("DEFAULT_LANG", "zh-Hant")
 
 
+@pytest.fixture(autouse=True)
+def no_log_files(monkeypatch):
+    """CLI tests run main(), which sets up logging; don't write log files from tests."""
+    monkeypatch.setenv("LOG_ENABLED", "false")
+
+
 @pytest.fixture
 def save_bytes() -> bytes:
     return make_save(*make_slots())

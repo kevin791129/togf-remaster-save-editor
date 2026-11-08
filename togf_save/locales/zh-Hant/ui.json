@@ -1,6 +1,7 @@
 {
   "language.name": "繁體中文",
 
+  "group.characters": "角色",
   "group.artes": "術・技使用次數",
   "group.items": "道具",
   "group.shards": "碎片",
@@ -10,6 +11,13 @@
   "shard.field.nature": "性質",
   "shard.field.strength": "強度",
   "shard.empty": "（空）",
+
+  "hint.usage_count": "使用次數",
+  "hint.perform_count": "達成次數",
+  "hint.linked_exp": "與經驗值、距下一級、等級互相連動",
+  "hint.linked_hp": "目前HP不可超過最大HP",
+  "hint.pair": "對方角色也記錄了同一數值，兩邊都要修改才會一致",
+  "hint.dishes_cooked": "稱號料理製作次數",
 
   "common.yes": "是",
   "common.no": "否",
@@ -34,6 +42,8 @@
   "table.summary_count": "（{count} 項）",
   "table.need_id": "請指定要編輯的 TABLE_ID",
   "table.native_first": "請在 {table} 之前指定 NATIVE 檔案",
+  "table.flag.read_only": "唯讀",
+  "table.flag.hidden": "隱藏",
   "native.missing": "請指定 NATIVE 檔案（slot2.NativeData.bin）",
 
   "shards.cleared": "已清空欄位 {slot}",
@@ -80,5 +90,15 @@
   "web.shards.full": "沒有空欄位了。",
   "web.shards.mismatch": "{name}（{type}）：數量記錄為 {stored}，但有 {actual} 個欄位是此種類。",
   "web.slot": "欄位",
-  "web.remove": "移除"
+  "web.remove": "移除",
+  "web.show_hidden": "顯示隱藏欄位",
+  "web.allow_read_only": "允許編輯唯讀欄位",
+  "web.force_warning": "⚠ 正在編輯唯讀欄位：修改可能使存檔資料不一致。",
+  "web.read_only": "唯讀",
+  "web.read_only_forced": "唯讀（允許編輯中）",
+  "web.read_only_value": "{name}：{value}（唯讀）",
+  "web.hidden": "隱藏",
+  "web.hint": "說明",
+  "web.sections": "分類",
+  "web.set_all_needs_force": "這些欄位是唯讀的，請先勾選「允許編輯唯讀欄位」"
 }

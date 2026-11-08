@@ -1,6 +1,7 @@
 {
   "language.name": "English",
 
+  "group.characters": "Character",
   "group.artes": "Arte usage",
   "group.items": "Items",
   "group.shards": "Shards",
@@ -10,6 +11,13 @@
   "shard.field.nature": "Nature",
   "shard.field.strength": "Strength",
   "shard.empty": "(empty)",
+
+  "hint.usage_count": "Number of times used",
+  "hint.perform_count": "Number of times performed",
+  "hint.linked_exp": "Linked with EXP, Next and Level",
+  "hint.linked_hp": "Current HP cannot exceed max HP",
+  "hint.pair": "The partner records this value too; change both so they stay consistent",
+  "hint.dishes_cooked": "Dishes cooked that count toward titles",
 
   "common.yes": "yes",
   "common.no": "no",
@@ -34,6 +42,8 @@
   "table.summary_count": "({count} entries)",
   "table.need_id": "give a TABLE_ID to edit",
   "table.native_first": "give the NATIVE file before {table}",
+  "table.flag.read_only": "read-only",
+  "table.flag.hidden": "hidden",
   "native.missing": "give the NATIVE file (slot2.NativeData.bin)",
 
   "shards.cleared": "cleared slot {slot}",
@@ -80,5 +90,15 @@
   "web.shards.full": "No empty slot left.",
   "web.shards.mismatch": "{name} ({type}): count byte is {stored}, but {actual} slots hold it.",
   "web.slot": "Slot",
-  "web.remove": "Remove"
+  "web.remove": "Remove",
+  "web.show_hidden": "Show hidden fields",
+  "web.allow_read_only": "Allow editing read-only fields",
+  "web.force_warning": "⚠ Editing read-only fields: changes may leave the save data inconsistent.",
+  "web.read_only": "Read-only",
+  "web.read_only_forced": "Read-only (editing allowed)",
+  "web.read_only_value": "{name}: {value} (read-only)",
+  "web.hidden": "Hidden",
+  "web.hint": "Hint",
+  "web.sections": "Sections",
+  "web.set_all_needs_force": "These fields are read-only. Turn on “Allow editing read-only fields” first."
 }

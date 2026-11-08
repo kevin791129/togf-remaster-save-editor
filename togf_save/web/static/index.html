@@ -31,10 +31,18 @@
 
   <nav id="tabs" class="tabs" role="tablist" hidden></nav>
 
+  <!-- global options, for every tab; the warning keeps its space while hidden so nothing shifts -->
+  <div id="globals" class="strip" hidden>
+    <label><input type="checkbox" id="show-hidden"> <span id="show-hidden-text"></span></label>
+    <label><input type="checkbox" id="force"> <span id="force-text"></span></label>
+    <span id="force-warning" class="strip-warn" role="status"></span>
+  </div>
+
   <main id="main">
     <p id="start" class="start"></p>
   </main>
 
+  <div id="tip" class="tip" role="tooltip" hidden></div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

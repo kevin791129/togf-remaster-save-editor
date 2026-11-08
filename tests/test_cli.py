@@ -1,7 +1,7 @@
 import pytest
 
 from togf_save import i18n, read_save
-from togf_save.cli import main
+from togf_save.cli import display_width, main
 from togf_save.native import NativeData, Shard, layout as L
 
 from .helpers import NATIVE_SIZE, make_save, make_slots
@@ -81,10 +81,25 @@ def test_missing_file(tmp_path, capsys):
 # --- table (.bin) ---
 
 def test_table_list(native_bin, capsys):
-    assert main(["table", str(native_bin), "--lang", "en"]) == 0
+    assert main(["table", str(native_bin), "--show-hints", "--lang", "en"]) == 0
     out = capsys.readouterr().out
     assert "item.consumable" in out and "max 30" in out and "max 9999" in out
     assert "Misc" in out and "(1 entries)" in out  # misc has no table-wide max
+
+
+def test_table_list_summary_only_with_hints(capsys):
+    assert main(["table", "--lang", "en"]) == 0
+    out = capsys.readouterr().out
+    assert "item.consumable" in out and "max 30" not in out and "entries" not in out
+    assert not any(line.endswith(" ") for line in out.splitlines())
+
+
+def test_table_list_summary_aligned(capsys):
+    assert main(["table", "--show-hints", "--lang", "zh-Hant"]) == 0
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.endswith("）")]
+    assert len(lines) == len(L.TABLES)
+    starts = {display_width(line[:line.rindex("（")]) for line in lines}
+    assert len(starts) == 1
 
 
 def test_table_rows(native_bin, capsys):
@@ -100,12 +115,12 @@ def test_table_set_in_place(native_bin, capsys):
 
 def test_table_set_all_to_output(native_bin, tmp_path):
     out = tmp_path / "out.bin"
-    assert main(["table", str(native_bin), "arte.asbel", "--set-all", "9999", "-o", str(out)]) == 0
-    assert native_of(out).values("arte.asbel") == [9999] * 36
-    assert native_of(native_bin).values("arte.asbel") == [0] * 36  # source untouched
+    assert main(["table", str(native_bin), "asbel.arte", "--set-all", "9999", "-o", str(out)]) == 0
+    assert native_of(out).values("asbel.arte") == [9999] * 36
+    assert native_of(native_bin).values("asbel.arte") == [0] * 36  # source untouched
 
 
-@pytest.mark.parametrize("table_id,limit", [("arte.asbel", 9999), ("item.consumable", 30), ("item.dish", 15),
+@pytest.mark.parametrize("table_id,limit", [("asbel.arte", 9999), ("item.consumable", 30), ("item.dish", 15),
                                             ("misc", 9999999)])
 def test_table_set_all_max(native_bin, table_id, limit):
     assert main(["table", str(native_bin), table_id, "--set-all", "max"]) == 0
@@ -133,6 +148,112 @@ def test_table_unknown(native_bin, capsys):
 def test_table_bad_set_syntax(native_bin):
     with pytest.raises(SystemExit):
         main(["table", str(native_bin), "item.dish", "--set", "0:5"])
+
+
+def _index(table_id, key):
+    t = L.TABLES[table_id]
+    return next(i for i in range(t.count) if t.entry_id(i) == f"{table_id}.{key}")
+
+
+def test_table_list_characters(capsys):
+    assert main(["table", "--lang", "zh-Hant"]) == 0
+    out = capsys.readouterr().out
+    assert "角色" in out and "艾斯貝爾" in out
+    for tid in ("asbel.stat", "asbel.arte", "pascal.counter", "malik.together", "item.consumable", "misc"):
+        assert tid in out
+    assert out.count("asbel.arte") == 1  # listed once, under its character
+    assert "stat.asbel" not in out  # ids are <character>.<table>
+    assert "    asbel.stat" in out and "能力值" in out
+
+
+def test_table_rows_flags(native_bin, capsys):
+    assert main(["table", str(native_bin), "asbel.stat", "--lang", "zh-Hant"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("[唯讀]") == L.TABLES["asbel.stat"].count
+    assert i18n.text("hint.linked_exp", "zh-Hant") not in out  # hints are off by default
+
+
+def test_table_rows_hints_on_the_same_line(native_bin, capsys):
+    assert main(["table", str(native_bin), "asbel.stat", "--show-hints", "--lang", "zh-Hant"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    hint = i18n.text("hint.linked_exp", "zh-Hant")
+    with_hint = [line for line in lines if hint in line]
+    assert len(with_hint) == 3  # exp, next, level
+    assert all(line.endswith("  # " + hint) and "[唯讀]" in line for line in with_hint)
+    assert "等級" in with_hint[2]
+
+
+def test_table_rows_hints_are_aligned(native_bin, capsys):
+    assert main(["table", str(native_bin), "asbel.stat", "--show-hints", "--lang", "zh-Hant"]) == 0
+    lines = [line for line in capsys.readouterr().out.splitlines() if "  # " in line]
+    assert len(lines) == 5  # exp, next, level, hp, max_hp
+    assert len({display_width(line.split("  # ")[0]) for line in lines}) == 1
+
+
+def test_table_rows_without_hints_have_no_padding(native_bin, capsys):
+    assert main(["table", str(native_bin), "asbel.stat", "--lang", "zh-Hant"]) == 0
+    assert not any(line.endswith(" ") for line in capsys.readouterr().out.splitlines())
+
+
+def test_display_width():
+    assert display_width("abc") == 3 and display_width("等級") == 4 and display_width("HP（x）") == 7
+
+
+def test_table_rows_table_hint_once_in_header(native_bin, capsys):
+    assert main(["table", str(native_bin), "asbel.arte", "--show-hints", "--lang", "zh-Hant"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    hint = i18n.text("hint.usage_count", "zh-Hant")
+    with_hint = [line for line in lines if hint in line]
+    assert len(with_hint) == 1 and with_hint[0] == lines[0]
+    assert with_hint[0].startswith(f"asbel.arte  {i18n.name('section.artes', 'zh-Hant')}")
+    assert with_hint[0].endswith("  # " + hint)
+
+
+def test_table_show_hidden(native_bin, capsys):
+    assert main(["table", str(native_bin), "asbel.counter", "--lang", "zh-Hant"]) == 0
+    out = capsys.readouterr().out
+    assert "[隱藏]" not in out and "+0xB28" not in out
+    assert main(["table", str(native_bin), "asbel.counter", "--show-hidden", "--lang", "zh-Hant"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("[隱藏]") == 2 and "+0xB28" in out
+
+
+def test_table_set_read_only_needs_force(native_bin, capsys):
+    level = _index("asbel.stat", "level")
+    assert main(["table", str(native_bin), "asbel.stat", "--set", f"{level}=50"]) == 1
+    assert "read-only" in capsys.readouterr().err
+    assert native_of(native_bin).get("asbel.stat", level) == 0
+    assert main(["table", str(native_bin), "asbel.stat", "--set", f"{level}=50", "--force"]) == 0
+    assert native_of(native_bin).get("asbel.stat", level) == 50
+
+
+def test_table_set_all_only_set_all_entries(native_bin):
+    assert main(["table", str(native_bin), "asbel.counter", "--set-all", "max"]) == 0
+    native = native_of(native_bin)
+    assert native.get("asbel.counter", _index("asbel.counter", "enemies_defeated")) == 9999999
+    assert native.get("asbel.counter", _index("asbel.counter", "unknown_b28")) == 0
+
+
+def test_table_set_all_read_only_needs_force(native_bin, capsys):
+    assert main(["table", str(native_bin), "asbel.stat", "--set-all", "max"]) == 1
+    assert "no entries" in capsys.readouterr().err
+    assert main(["table", str(native_bin), "asbel.stat", "--set-all", "max", "--force"]) == 0
+    native = native_of(native_bin)
+    assert native.get("asbel.stat", _index("asbel.stat", "attack")) == 1999
+    assert native.get("asbel.stat", _index("asbel.stat", "level")) == 0  # not SET_ALL
+
+
+def test_table_set_all_refused_without_set_all_entries(native_bin, capsys):
+    before = native_bin.read_bytes()
+    assert main(["table", str(native_bin), "asbel.together", "--set-all", "1", "--force"]) == 1
+    assert "no entries" in capsys.readouterr().err
+    assert native_bin.read_bytes() == before
+
+
+def test_table_set_prints_shared_name(native_bin, capsys):
+    i = _index("asbel.together", "pascal")
+    assert main(["table", str(native_bin), "asbel.together", "--set", f"{i}=477", "--force", "--lang", "zh-Hant"]) == 0
+    assert "asbel.together.pascal  帕絲可: 0 -> 477" in capsys.readouterr().out
 
 
 def test_table_rejects_short_file(tmp_path, capsys):
