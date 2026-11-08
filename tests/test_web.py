@@ -50,8 +50,10 @@ def test_meta(client):
 
 def test_meta_en(client):
     m = client.get("/api/meta", params={"lang": "en"}).json()
-    assert m["ui"]["group.items"] == "Items" and m["groups"][1]["name"] == "Items"
-    assert m["groups"][1]["tables"][0]["name"] == i18n.name("item.consumable", "en")
+    items = next(g for g in m["groups"] if g["id"] == "items")
+    assert m["ui"]["group.items"] == "Items" and items["name"] == "Items"
+    assert items["tables"][0]["name"] == i18n.name("item.consumable", "en")
+    assert [g["id"] for g in m["groups"]] == ["items", "misc"]  # artes are under characters
 
 
 def test_meta_characters(client):

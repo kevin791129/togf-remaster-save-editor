@@ -2,6 +2,7 @@
 // ToGf Save Editor frontend: plain JS over the /api endpoints (see togf_save/web/app.py).
 // Every edit is sent to the server right away; the save is encoded on download.
 // Interface text comes from /api/meta (togf_save/locales/<lang>/ui.json).
+// Nothing but the language and the browser tab's session id is remembered across reloads.
 
 const $ = (id) => document.getElementById(id);
 const FAILED = Symbol("failed");
@@ -12,8 +13,12 @@ const state = {
   session: null,
   tab: "overview",
   sub: {},            // group id -> selected table id
+  char: null,         // characters tab: selected character id
+  section: null,      // characters tab: selected section, kept when the character changes
   filter: "",
-  showEmpty: false,
+  showEmpty: false,   // shards tab
+  showHidden: false,  // global: list hidden fields
+  force: false,       // global: allow editing read-only fields
 };
 let renderToken = 0;
 
@@ -65,6 +70,42 @@ function toast(message, error = false) {
   toastTimer = setTimeout(() => { el.hidden = true; }, error ? 6000 : 2500);
 }
 
+// --- hints: an ⓘ whose text shows on hover or keyboard focus ---
+
+let hintCount = 0;
+
+// [ⓘ, screen-reader copy of the text]; `focusable`: false inside another control (a tab button).
+// Returns the id of the screen-reader copy too, for aria-describedby on the related control.
+function hintIcon(text, focusable = true) {
+  const id = "hint-" + ++hintCount;
+  const icon = h("i", { class: "info", "data-hint": text, tabIndex: focusable ? 0 : null,
+                        "aria-label": t("web.hint"), "aria-describedby": id }, "i");
+  return { id, nodes: [icon, h("span", { id, class: "sr-only" }, text)] };
+}
+
+function showTip(target) {
+  const tip = $("tip");
+  tip.textContent = target.dataset.hint;
+  tip.hidden = false;
+  const r = target.getBoundingClientRect();
+  const left = Math.min(r.left, window.innerWidth - tip.offsetWidth - 8);
+  const below = r.bottom + 6 + tip.offsetHeight < window.innerHeight;
+  tip.style.left = Math.max(8, left) + "px";
+  tip.style.top = (below ? r.bottom + 6 : r.top - tip.offsetHeight - 6) + "px";
+}
+const hideTip = () => { $("tip").hidden = true; };
+
+for (const ev of ["pointerover", "focusin"]) {
+  document.addEventListener(ev, (e) => {
+    const target = e.target.closest && e.target.closest("[data-hint]");
+    if (target) showTip(target);
+  });
+}
+for (const ev of ["pointerout", "focusout"]) {
+  document.addEventListener(ev, (e) => { if (e.target.closest && e.target.closest("[data-hint]")) hideTip(); });
+}
+document.addEventListener("scroll", hideTip, true);
+
 // --- API ---
 
 class ApiError extends Error {
@@ -94,6 +135,8 @@ async function api(method, path, body) {
 const json = async (method, path, body) => (await api(method, path, body)).json();
 const withLang = (path) => path + (path.includes("?") ? "&" : "?") + "lang=" + encodeURIComponent(state.lang);
 const sessionPath = (sub = "") => `/api/sessions/${state.session.id}${sub}`;
+const tablePath = (tableId) =>
+  withLang(sessionPath(`/tables/${tableId}`)) + (state.showHidden ? "&show_hidden=true" : "");
 
 // Runs an API call; shows errors and returns FAILED instead of throwing.
 async function run(call) {
@@ -118,7 +161,7 @@ async function refreshSummary() {
   }
 }
 
-// --- chrome: header, tabs, language ---
+// --- chrome: header, tabs, global options, language ---
 
 async function loadMeta(lang) {
   state.meta = await json("GET", "/api/meta" + (lang ? "?lang=" + encodeURIComponent(lang) : ""));
@@ -129,8 +172,8 @@ function tabList() {
   const group = (id) => state.meta.groups.find((g) => g.id === id);
   return [
     { id: "overview", label: t("web.tab.overview") },
+    { id: "characters", label: t("group.characters") },
     { id: "items", label: group("items").name },
-    { id: "artes", label: group("artes").name },
     { id: "shards", label: state.meta.shards.name },
     { id: "misc", label: group("misc").name },
   ];
@@ -152,6 +195,12 @@ function renderChrome() {
     "aria-selected": String(tab.id === state.tab),
     onclick: () => { state.tab = tab.id; state.filter = ""; renderChrome(); render(); },
   }, tab.label)));
+  $("show-hidden-text").textContent = t("web.show_hidden");
+  $("force-text").textContent = t("web.allow_read_only");
+  $("force-warning").textContent = t("web.force_warning");
+  $("show-hidden").checked = state.showHidden;
+  $("force").checked = state.force;
+  $("force-warning").classList.toggle("on", state.force);
   updateHeader();
 }
 
@@ -162,6 +211,7 @@ function updateHeader() {
   $("download").hidden = !s;
   $("close").hidden = !s;
   $("tabs").hidden = !s;
+  $("globals").hidden = !s;
 }
 
 function setSession(summary) {
@@ -176,15 +226,16 @@ function setSession(summary) {
 
 async function render() {
   const token = ++renderToken;
+  hideTip();
   const main = $("main");
   if (!state.session) {
     main.replaceChildren(h("p", { class: "start" }, t("web.start")));
     return;
   }
-  const view = { overview: viewOverview, items: () => viewGroup("items"), artes: () => viewGroup("artes"),
+  const view = { overview: viewOverview, characters: viewCharacters, items: () => viewGroup("items"),
                  shards: viewShards, misc: viewMisc }[state.tab];
   const content = await view();
-  if (token === renderToken && content) main.replaceChildren(...[content].flat());
+  if (token === renderToken && content) main.replaceChildren(...[content].flat(Infinity));
 }
 
 async function viewOverview() {
@@ -232,7 +283,38 @@ async function viewOverview() {
 // Fixed-width columns (see style.css) so widths don't shift between tabs; null = takes the rest.
 const colgroup = (...classes) => h("colgroup", {}, classes.map((c) => h("col", { class: c })));
 
-// A table of editable values. entries: [{tableId, index, number, id, name, offset, value, max}]
+// A row of tabs. items: [{key, label}]; `hint` (if any) is shown as an ⓘ on the selected tab.
+function tabRow(items, selected, onPick, { hint = "", label = null } = {}) {
+  return h("nav", { class: "subtabs", role: "tablist", "aria-label": label }, items.map((item) => {
+    const isSelected = item.key === selected;
+    const info = isSelected && hint ? hintIcon(hint, false) : null;
+    return h("button", {
+      role: "tab", "aria-selected": String(isSelected), "aria-describedby": info ? info.id : null,
+      onclick: () => onPick(item.key),
+    }, item.label, info ? info.nodes : null);
+  }));
+}
+
+// The value cell: an input, or the value as text when read-only (and not forced), then a lock slot.
+function valueCell(entry, onCommit) {
+  const readOnly = entry.read_only && !state.force;
+  const lock = h("span", { class: "lock", "aria-hidden": "true",
+    title: entry.read_only ? t(state.force ? "web.read_only_forced" : "web.read_only") : null },
+    entry.read_only ? (state.force ? "🔓" : "🔒") : "");
+  if (readOnly) {
+    return { input: null, cell: h("td", { class: "num" }, h("span", { class: "value" },
+      h("span", { class: "text", "aria-label": t("web.read_only_value", { name: entry.name, value: entry.value }) },
+        entry.value), lock)) };
+  }
+  const input = h("input", { type: "number", min: 0, max: entry.max, step: 1, value: entry.value,
+                             class: entry.read_only ? "forced" : null, "aria-label": entry.name,
+                             "aria-describedby": entry.hintId });
+  input.addEventListener("change", () => onCommit(input));
+  return { input, cell: h("td", { class: "num" }, h("span", { class: "value" }, input, lock)) };
+}
+
+// A table of editable values. entries: [{tableId, index, number, id, name, offset, value, max,
+// read_only, hidden, hint}]
 function valueTable(entries) {
   const byKey = new Map();
   const commit = async (entry, input, tr) => {
@@ -245,8 +327,8 @@ function valueTable(entries) {
       return;
     }
     if (value === entry.value) return;
-    const res = await run(() => json("PATCH", withLang(sessionPath(`/tables/${entry.tableId}`)),
-                                     { set: { [entry.index]: value } }));
+    const res = await run(() => json("PATCH", tablePath(entry.tableId),
+                                     { set: { [entry.index]: value }, force: state.force }));
     if (res === FAILED) {
       input.value = entry.value;
       return;
@@ -259,14 +341,16 @@ function valueTable(entries) {
   };
 
   const rows = entries.map((entry) => {
-    const input = h("input", { type: "number", min: 0, max: entry.max, step: 1, value: entry.value,
-                               "aria-label": entry.name });
-    const tr = h("tr", {},
+    const hint = entry.hint ? hintIcon(entry.hint) : null;
+    entry.hintId = hint ? hint.id : null;
+    const tr = h("tr", { class: entry.hidden ? "hidden-row" : null });
+    const { input, cell } = valueCell(entry, (inp) => commit(entry, inp, tr));
+    tr.append(
       h("td", { class: "num" }, entry.number),
-      h("td", { class: entry.name === entry.id ? "unknown" : "", title: entry.name }, entry.name),
+      h("td", { class: entry.name === entry.id ? "unknown" : "", title: entry.name },
+        entry.name, hint ? hint.nodes : null, entry.hidden ? h("span", { class: "tag" }, t("web.hidden")) : null),
       h("td", { class: "mono" }, hex(entry.offset)),
-      h("td", { class: "num" }, input));
-    input.addEventListener("change", () => commit(entry, input, tr));
+      cell);
     byKey.set(`${entry.tableId}/${entry.index}`, { entry, input, tr });
     return tr;
   });
@@ -276,7 +360,8 @@ function valueTable(entries) {
       const item = byKey.get(`${tableId}/${row.index}`);
       if (item) {
         item.entry.value = row.value;
-        item.input.value = row.value;
+        if (item.input) item.input.value = row.value;
+        else item.tr.querySelector(".value .text").textContent = row.value;
       }
     }
   }
@@ -298,59 +383,93 @@ function valueTable(entries) {
 }
 
 const entriesOf = (data) => data.rows.map((row) => ({
-  tableId: data.id, index: row.index, number: row.number, id: row.id, name: row.name, offset: row.offset, value: row.value, max: row.max,
+  tableId: data.id, index: row.index, number: row.number, id: row.id, name: row.name, offset: row.offset,
+  value: row.value, max: row.max, read_only: row.read_only, hidden: row.hidden, set_all: row.set_all, hint: row.hint,
 }));
+
+// "Set all to max" for the tables in `datas`, or null when none of them has bulk-editable entries.
+// Disabled (with a tooltip) when every bulk-editable entry is read-only and forcing is off.
+function setAllButton(datas, table) {
+  const bulk = datas.filter((d) => d.set_all);
+  if (!bulk.length) return null;
+  const writable = bulk.some((d) => d.rows.some((r) => r.set_all && (state.force || !r.read_only)));
+  const label = bulk.length === 1 && bulk[0].max != null
+    ? t("web.set_all_max", { max: bulk[0].max }) : t("web.set_all_to_max");
+  return h("button", {
+    disabled: !writable, title: writable ? null : t("web.set_all_needs_force"),
+    onclick: async () => {
+      for (const data of bulk) {
+        const res = await run(() => json("PATCH", tablePath(data.id), { set_all: "max", force: state.force }));
+        if (res === FAILED) break;
+        table.update(data.id, res.rows);
+      }
+      refreshSummary();
+    },
+  }, label);
+}
+
+// Filter box + set-all button + table, for one table's data.
+function tableBlock(data) {
+  const table = valueTable(entriesOf(data));
+  table.filter(state.filter);
+  const toolbar = h("div", { class: "toolbar" },
+    h("input", { type: "text", placeholder: t("web.filter"), value: state.filter, "aria-label": t("web.filter"),
+                 oninput: (e) => { state.filter = e.target.value; table.filter(state.filter); } }),
+    h("span", { class: "spacer" }),
+    setAllButton([data], table));
+  return [toolbar, table.el];
+}
+
+async function viewCharacters() {
+  const characters = state.meta.characters;
+  let character = characters.find((c) => c.id === state.char);
+  if (!character) {
+    character = characters[0];
+    state.char = character.id;
+  }
+  if (!character.tables.some((tb) => tb.section === state.section)) state.section = character.tables[0].section;
+  const tableId = character.tables.find((tb) => tb.section === state.section).id;
+
+  const data = await run(() => json("GET", tablePath(tableId)));
+  if (data === FAILED) return null;
+
+  const pick = (id) => { state.char = id; state.filter = ""; render(); };
+  const side = h("div", { class: "side", role: "tablist", "aria-label": t("group.characters"),
+                          "aria-orientation": "vertical" },
+    characters.map((c) => h("button", { role: "tab", "aria-selected": String(c.id === state.char),
+                                        onclick: () => pick(c.id) }, c.name)));
+  const select = h("select", { class: "side-select", "aria-label": t("group.characters"),
+                               onchange: (e) => pick(e.target.value) },
+    characters.map((c) => h("option", { value: c.id, selected: c.id === state.char }, c.name)));
+  const sections = tabRow(character.tables.map((tb) => ({ key: tb.section, label: tb.name })), state.section,
+    (key) => { state.section = key; state.filter = ""; render(); },
+    { hint: data.hint, label: t("web.sections") });
+
+  return h("div", { class: "split" }, side,
+    h("div", { class: "content" }, select, sections, tableBlock(data)));
+}
 
 async function viewGroup(groupId) {
   const group = state.meta.groups.find((g) => g.id === groupId);
   let tableId = state.sub[groupId];
   if (!group.tables.some((tb) => tb.id === tableId)) tableId = state.sub[groupId] = group.tables[0].id;
 
-  const data = await run(() => json("GET", withLang(sessionPath(`/tables/${tableId}`))));
+  const data = await run(() => json("GET", tablePath(tableId)));
   if (data === FAILED) return null;
 
-  const table = valueTable(entriesOf(data));
-  table.filter(state.filter);
-  const setAllMax = async () => {
-    const res = await run(() => json("PATCH", withLang(sessionPath(`/tables/${tableId}`)), { set_all: "max" }));
-    if (res !== FAILED) {
-      table.update(tableId, res.rows);
-      refreshSummary();
-    }
-  };
-
-  const subtabs = h("div", { class: "subtabs", role: "tablist" }, group.tables.map((tb) => h("button", {
-    role: "tab",
-    "aria-selected": String(tb.id === tableId),
-    onclick: () => { state.sub[groupId] = tb.id; state.filter = ""; render(); },
-  }, tb.name)));
-  const toolbar = h("div", { class: "toolbar" },
-    h("input", { type: "text", placeholder: t("web.filter"), value: state.filter, "aria-label": t("web.filter"),
-                 oninput: (e) => { state.filter = e.target.value; table.filter(state.filter); } }),
-    h("span", { class: "spacer" }),
-    h("button", { onclick: setAllMax }, t("web.set_all_max", { max: data.max })));
-  return [subtabs, toolbar, table.el];
+  const subtabs = tabRow(group.tables.map((tb) => ({ key: tb.id, label: tb.name })), tableId,
+    (key) => { state.sub[groupId] = key; state.filter = ""; render(); }, { hint: data.hint });
+  return [subtabs, ...tableBlock(data)];
 }
 
 async function viewMisc() {
   const group = state.meta.groups.find((g) => g.id === "misc");
   if (!group.tables.length) return h("p", { class: "start" }, t("web.misc_empty"));
 
-  const tables = await Promise.all(group.tables.map((tb) =>
-    run(() => json("GET", withLang(sessionPath(`/tables/${tb.id}`))))));
-  if (tables.includes(FAILED)) return null;
-  const table = valueTable(tables.flatMap(entriesOf));
-  const setAllMax = async () => {
-    for (const data of tables) {
-      const res = await run(() => json("PATCH", withLang(sessionPath(`/tables/${data.id}`)), { set_all: "max" }));
-      if (res === FAILED) break;
-      table.update(data.id, res.rows);
-    }
-    refreshSummary();
-  };
-  return [h("div", { class: "toolbar" }, h("span", { class: "spacer" }),
-                                          h("button", { onclick: setAllMax }, t("web.set_all_to_max"))),
-          table.el];
+  const datas = await Promise.all(group.tables.map((tb) => run(() => json("GET", tablePath(tb.id)))));
+  if (datas.includes(FAILED)) return null;
+  const table = valueTable(datas.flatMap(entriesOf));
+  return [h("div", { class: "toolbar" }, h("span", { class: "spacer" }), setAllButton(datas, table)), table.el];
 }
 
 async function viewShards() {
@@ -495,6 +614,17 @@ async function changeLang(lang) {
   render();
 }
 
+function setShowHidden(on) {
+  state.showHidden = on;
+  render();
+}
+
+function setForce(on) {
+  state.force = on;
+  $("force-warning").classList.toggle("on", on);
+  render();
+}
+
 async function init() {
   try {
     await loadMeta(prefs.get("lang"));
@@ -509,6 +639,8 @@ async function init() {
   $("download").addEventListener("click", download);
   $("close").addEventListener("click", closeSession);
   $("lang").addEventListener("change", (e) => changeLang(e.target.value));
+  $("show-hidden").addEventListener("change", (e) => setShowHidden(e.target.checked));
+  $("force").addEventListener("change", (e) => setForce(e.target.checked));
   window.addEventListener("beforeunload", (e) => {
     if (state.session && state.session.modified) e.preventDefault();
   });

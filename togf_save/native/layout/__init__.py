@@ -23,9 +23,8 @@ from .types import Field, FieldTable, Flag, IntTable, is_float
 
 TABLES: dict[str, IntTable | FieldTable] = {
     t.id: t for t in ARTES + ITEMS + (MISC,) + STATS + COUNTERS + TOGETHER}
-# Flat groups of tables; the per-character tables are listed by CHARACTER_SECTIONS instead.
+# Groups of the other tables; the per-character tables are listed by CHARACTER_SECTIONS instead.
 GROUPS: dict[str, tuple[str, ...]] = {
-    "artes": tuple(t.id for t in ARTES),
     "items": tuple(t.id for t in ITEMS),
     "misc": (MISC.id,),
 }

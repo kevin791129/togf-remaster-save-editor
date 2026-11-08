@@ -1,6 +1,7 @@
 {
   "language.name": "日本語",
 
+  "group.characters": "キャラクター",
   "group.artes": "術技使用回数",
   "group.items": "アイテム",
   "group.shards": "欠片",
@@ -10,6 +11,13 @@
   "shard.field.nature": "性質",
   "shard.field.strength": "強さ",
   "shard.empty": "（空）",
+
+  "hint.usage_count": "使用回数",
+  "hint.perform_count": "達成回数",
+  "hint.linked_exp": "経験値・NEXT・レベルは連動しています",
+  "hint.linked_hp": "現在のHPは最大HPを超えられません",
+  "hint.pair": "相手キャラクターにも同じ値が記録されています。両方を変更しないと一致しません",
+  "hint.dishes_cooked": "称号の条件になる料理の作成回数",
 
   "common.yes": "はい",
   "common.no": "いいえ",
@@ -34,6 +42,8 @@
   "table.summary_count": "（{count} 項目）",
   "table.need_id": "編集する TABLE_ID を指定してください",
   "table.native_first": "{table} の前に NATIVE ファイルを指定してください",
+  "table.flag.read_only": "読み取り専用",
+  "table.flag.hidden": "非表示",
   "native.missing": "NATIVE ファイル（slot2.NativeData.bin）を指定してください",
 
   "shards.cleared": "スロット {slot} を空にしました",
@@ -80,5 +90,15 @@
   "web.shards.full": "空きスロットがありません。",
   "web.shards.mismatch": "{name}（{type}）：個数は {stored} と記録されていますが、{actual} スロットがこの種類です。",
   "web.slot": "スロット",
-  "web.remove": "削除"
+  "web.remove": "削除",
+  "web.show_hidden": "非表示の項目を表示",
+  "web.allow_read_only": "読み取り専用の項目を編集可能にする",
+  "web.force_warning": "⚠ 読み取り専用の項目を編集中：セーブデータの整合性が崩れる可能性があります。",
+  "web.read_only": "読み取り専用",
+  "web.read_only_forced": "読み取り専用（編集を許可中）",
+  "web.read_only_value": "{name}：{value}（読み取り専用）",
+  "web.hidden": "非表示",
+  "web.hint": "説明",
+  "web.sections": "分類",
+  "web.set_all_needs_force": "これらの項目は読み取り専用です。先に「読み取り専用の項目を編集可能にする」をオンにしてください"
 }

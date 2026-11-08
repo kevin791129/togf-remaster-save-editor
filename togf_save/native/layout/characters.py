@@ -81,9 +81,8 @@ ARTE_COUNTS = {
 
 
 def _artes(character: str) -> IntTable:
-    # name_key becomes "section.artes" once the frontend lists tables per character (step 11)
     return IntTable(f"{character}.arte", char_offset(character, ARTE_REL), ARTE_COUNTS[character],
-                    size=2, stride=ARTE_STRIDE, name_key=f"character.{character}", limit=ARTE_LIMIT,
+                    size=2, stride=ARTE_STRIDE, name_key="section.artes", limit=ARTE_LIMIT,
                     flags=SET_ALL, hint_key="hint.usage_count")
 
 
@@ -92,14 +91,12 @@ COUNTER_LIMITS = {2: 9999, 4: 9999999}  # default cap by size: u16, u32
 
 _COUNT = {"flags": SET_ALL}
 _UNKNOWN = {"flags": RO | HIDDEN}
-_COMBO = {"flags": SET_ALL, "hint_key": "hint.combo_tier"}
-_DEFENDED = {"flags": SET_ALL, "hint_key": "hint.status_defended"}
 
 COUNTER_SPEC = (
-    ("combo_15", 0xB14, 2, _COMBO),
-    ("combo_30", 0xB16, 2, _COMBO),
-    ("combo_50", 0xB18, 2, _COMBO),
-    ("combo_100", 0xB1A, 2, _COMBO),
+    ("combo_15", 0xB14, 2, _COUNT),
+    ("combo_30", 0xB16, 2, _COUNT),
+    ("combo_50", 0xB18, 2, _COUNT),
+    ("combo_100", 0xB1A, 2, _COUNT),
     ("enemies_defeated", 0xB1C, 4, _COUNT),
     ("defeated_2_at_once", 0xB20, 4, _COUNT),
     ("defeated_4_at_once", 0xB24, 4, _COUNT),
@@ -118,22 +115,22 @@ COUNTER_SPEC = (
     ("items_stolen", 0xB48, 2, _COUNT),
     ("items_received", 0xB4A, 2, _COUNT),
     ("battles_controlled", 0xB4C, 2, _COUNT),
-    ("defended_poison", 0xB4E, 2, _DEFENDED),
-    ("defended_paralysis", 0xB50, 2, _DEFENDED),
-    ("defended_freeze", 0xB52, 2, _DEFENDED),
-    ("defended_burn", 0xB54, 2, _DEFENDED),
-    ("defended_petrify", 0xB56, 2, _DEFENDED),
-    ("defended_heavy", 0xB58, 2, _DEFENDED),
-    ("defended_seal", 0xB5A, 2, _DEFENDED),
-    ("defended_curse", 0xB5C, 2, _DEFENDED),
-    ("defended_weaken", 0xB5E, 2, _DEFENDED),
-    ("dishes_cooked", 0xB60, 2, _COUNT),
+    ("defended_poison", 0xB4E, 2, _COUNT),
+    ("defended_paralysis", 0xB50, 2, _COUNT),
+    ("defended_freeze", 0xB52, 2, _COUNT),
+    ("defended_burn", 0xB54, 2, _COUNT),
+    ("defended_petrify", 0xB56, 2, _COUNT),
+    ("defended_heavy", 0xB58, 2, _COUNT),
+    ("defended_seal", 0xB5A, 2, _COUNT),
+    ("defended_curse", 0xB5C, 2, _COUNT),
+    ("defended_weaken", 0xB5E, 2, _COUNT),
+    ("dishes_cooked", 0xB60, 2, {"flags": SET_ALL, "hint_key": "hint.dishes_cooked"}),
 )
 
 
 def _counters(character: str) -> FieldTable:
     return FieldTable(f"{character}.counter", _fields(character, "counter", COUNTER_SPEC, COUNTER_LIMITS),
-                      name_key="section.counters")
+                      name_key="section.counters", hint_key="hint.perform_count")
 
 
 # --- battles fought together: u16 per partner, in CHARACTERS order; own slot hidden ---

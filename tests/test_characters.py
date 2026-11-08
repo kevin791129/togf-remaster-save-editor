@@ -124,9 +124,10 @@ def test_together_flags():
     ("asbel.stat", "hp", "hint.linked_hp"),
     ("asbel.stat", "max_hp", "hint.linked_hp"),
     ("asbel.stat", "attack", ""),
-    ("asbel.counter", "combo_100", "hint.combo_tier"),
-    ("asbel.counter", "defended_seal", "hint.status_defended"),
-    ("asbel.counter", "critical_hits", ""),
+    ("asbel.counter", "combo_100", "hint.perform_count"),  # the table's hint
+    ("asbel.counter", "defended_seal", "hint.perform_count"),
+    ("asbel.counter", "critical_hits", "hint.perform_count"),
+    ("asbel.counter", "dishes_cooked", "hint.dishes_cooked"),  # its own hint overrides the table's
     ("asbel.together", "sophie", "hint.pair"),
 ])
 def test_hints(table_id, key, hint):

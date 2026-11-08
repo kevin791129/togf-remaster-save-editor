@@ -65,19 +65,19 @@ Each field can have these flags (`togf_save.native.layout.Flag`):
 Verified against the in-game Status screen. The whole table is `READ_ONLY`: these values are tied
 to each other and to the level curve, and the game recalculates some of them.
 
-| Rel | Type | Key | Name | Confidence | Flags | Cap | Hint |
-|---|---|---|---|---|---|---|---|
-| `+0x000` | u32 | `exp` | EXP total | CONFIRMED | RO | – | `hint.linked_exp` |
-| `+0x004` | u32 | `next` | EXP to next level | CONFIRMED | RO | – | `hint.linked_exp` |
-| `+0x008` | u16 | `level` | Level | CONFIRMED | RO | 200 | `hint.linked_exp` |
-| `+0x018` | u32 | `hp` | Current HP | CONFIRMED | RO | 9999 | `hint.linked_hp` |
-| `+0x020` | f32 | `attack` | Attack (攻擊) | CONFIRMED | RO, SET_ALL | 1999 | – |
-| `+0x024` | f32 | `arte_attack` | Arte Attack (術攻) | CONFIRMED | RO, SET_ALL | 1999 | – |
-| `+0x028` | f32 | `accuracy` | Accuracy (命中) | CONFIRMED | RO, SET_ALL | 1999 | – |
-| `+0x02C` | f32 | `defense` | Defense (防禦) | CONFIRMED | RO, SET_ALL | 1999 | – |
-| `+0x030` | f32 | `arte_defense` | Arte Defense (術防) | CONFIRMED | RO, SET_ALL | 1999 | – |
-| `+0x034` | f32 | `evasion` | Evasion (迴避) | CONFIRMED | RO, SET_ALL | 1999 | – |
-| `+0x038` | f32 | `max_hp` | Max HP | CONFIRMED | RO | 9999 | `hint.linked_hp` |
+| Rel | Type | Key | Name | Confidence | Flags | Cap |
+|---|---|---|---|---|---|---|
+| `+0x000` | u32 | `exp` | EXP total | CONFIRMED | RO | – |
+| `+0x004` | u32 | `next` | EXP to next level | CONFIRMED | RO | – |
+| `+0x008` | u16 | `level` | Level | CONFIRMED | RO | 200 |
+| `+0x018` | u32 | `hp` | Current HP | CONFIRMED | RO | 9999 |
+| `+0x020` | f32 | `attack` | Attack | CONFIRMED | RO, SET_ALL | 1999 |
+| `+0x024` | f32 | `arte_attack` | Arte Attack | CONFIRMED | RO, SET_ALL | 1999 |
+| `+0x028` | f32 | `accuracy` | Accuracy | CONFIRMED | RO, SET_ALL | 1999 |
+| `+0x02C` | f32 | `defense` | Defense | CONFIRMED | RO, SET_ALL | 1999 |
+| `+0x030` | f32 | `arte_defense` | Arte Defense | CONFIRMED | RO, SET_ALL | 1999 |
+| `+0x034` | f32 | `evasion` | Evasion | CONFIRMED | RO, SET_ALL | 1999 |
+| `+0x038` | f32 | `max_hp` | Max HP | CONFIRMED | RO | 9999 |
 
 - **Linked values:** EXP, NEXT and Level move together. Changing one alone leaves them out of step
   with the level curve. Current HP must not exceed Max HP.
@@ -89,9 +89,9 @@ to each other and to the level curve, and the game recalculates some of them.
 
 ## Artes
 
-| Rel | Type | Count | Confidence | Flags | Cap | Hint |
-|---|---|---|---|---|---|---|
-| `+0x6DE + 12 × k` | u16 | per character | CONFIRMED | SET_ALL | 9999 | `hint.usage_count` (table-wide) |
+| Rel | Type | Count | Confidence | Flags | Cap |
+|---|---|---|---|---|---|
+| `+0x6DE + 12 × k` | u16 | per character | CONFIRMED | SET_ALL | 9999 |
 
 - Each arte has a 12-byte record. Only its 2-byte usage count is mapped; the other 10 bytes are
   unknown.
@@ -104,40 +104,40 @@ to each other and to the level curve, and the game recalculates some of them.
 The layout is the same in every block, whether or not that character has a title that uses the
 counter. Every visible counter is `SET_ALL`. Default caps: 9999 for u16, 9999999 for u32.
 
-| Rel | Type | Key | Meaning | Confidence | Flags | Hint |
-|---|---|---|---|---|---|---|
-| `+0xB14` | u16 | `combo_15` | 15-hit combos | LIKELY | SET_ALL | `hint.combo_tier` |
-| `+0xB16` | u16 | `combo_30` | 30-hit combos | LIKELY | SET_ALL | `hint.combo_tier` |
-| `+0xB18` | u16 | `combo_50` | 50-hit combos | LIKELY | SET_ALL | `hint.combo_tier` |
-| `+0xB1A` | u16 | `combo_100` | 100-hit combos | LIKELY | SET_ALL | `hint.combo_tier` |
-| `+0xB1C` | u32 | `enemies_defeated` | Enemies defeated | CONFIRMED | SET_ALL | – |
-| `+0xB20` | u32 | `defeated_2_at_once` | Defeated 2 enemies at once | LIKELY | SET_ALL | – |
-| `+0xB24` | u32 | `defeated_4_at_once` | Defeated 4 enemies at once | CONFIRMED | SET_ALL | – |
-| `+0xB28` | u32 | `unknown_b28` | ? (zero for all characters) | UNKNOWN | RO, HIDDEN | – |
-| `+0xB2C` | u32 | `critical_hits` | Critical hits | CONFIRMED | SET_ALL | – |
-| `+0xB30` | u32 | `weakness_hits` | Weakness hits | CONFIRMED | SET_ALL | – |
-| `+0xB34` | u32 | `damage_received` | Damage received | LIKELY | SET_ALL | – |
-| `+0xB38` | u16 | `quick_battles` | Battles ended within 10 s | GUESS | SET_ALL | – |
-| `+0xB3A` | u16 | `cc1_artes` | CC1 artes used | INFERRED | SET_ALL | – |
-| `+0xB3C` | u16 | `cc2_artes` | CC2 artes used | INFERRED | SET_ALL | – |
-| `+0xB3E` | u16 | `cc3_artes` | CC3 artes used | INFERRED | SET_ALL | – |
-| `+0xB40` | u16 | `cc4_artes` | CC4 artes used | CONFIRMED | SET_ALL | – |
-| `+0xB42` | u16 | `unknown_b42` | ? (likely arte-related) | UNKNOWN | RO, HIDDEN | – |
-| `+0xB44` | u16 | `a_artes` | A-arte uses, total | CONFIRMED | SET_ALL | – |
-| `+0xB46` | u16 | `b_artes` | B-arte uses, total | CONFIRMED | SET_ALL | – |
-| `+0xB48` | u16 | `items_stolen` | Items stolen | CONFIRMED | SET_ALL | – |
-| `+0xB4A` | u16 | `items_received` | Items received after battle | CONFIRMED | SET_ALL | – |
-| `+0xB4C` | u16 | `battles_controlled` | Battles won as the player-controlled character | LIKELY | SET_ALL | – |
-| `+0xB4E` | u16 | `defended_poison` | Status defended: 劇毒 | GUESS | SET_ALL | `hint.status_defended` |
-| `+0xB50` | u16 | `defended_paralysis` | Status defended: 麻痺 | GUESS | SET_ALL | `hint.status_defended` |
-| `+0xB52` | u16 | `defended_freeze` | Status defended: 凍結 | GUESS | SET_ALL | `hint.status_defended` |
-| `+0xB54` | u16 | `defended_burn` | Status defended: 燒傷 | GUESS | SET_ALL | `hint.status_defended` |
-| `+0xB56` | u16 | `defended_petrify` | Status defended: 石化 | GUESS | SET_ALL | `hint.status_defended` |
-| `+0xB58` | u16 | `defended_heavy` | Status defended: 笨重 | GUESS | SET_ALL | `hint.status_defended` |
-| `+0xB5A` | u16 | `defended_seal` | Status defended: 封印 | GUESS | SET_ALL | `hint.status_defended` |
-| `+0xB5C` | u16 | `defended_curse` | Status defended: 咒殺 | GUESS | SET_ALL | `hint.status_defended` |
-| `+0xB5E` | u16 | `defended_weaken` | Status defended: 弱化 | GUESS | SET_ALL | `hint.status_defended` |
-| `+0xB60` | u16 | `dishes_cooked` | Dishes cooked | GUESS | SET_ALL | – |
+| Rel | Type | Key | Meaning | Confidence | Flags |
+|---|---|---|---|---|---|
+| `+0xB14` | u16 | `combo_15` | 15-hit combos | LIKELY | SET_ALL |
+| `+0xB16` | u16 | `combo_30` | 30-hit combos | LIKELY | SET_ALL |
+| `+0xB18` | u16 | `combo_50` | 50-hit combos | LIKELY | SET_ALL |
+| `+0xB1A` | u16 | `combo_100` | 100-hit combos | LIKELY | SET_ALL |
+| `+0xB1C` | u32 | `enemies_defeated` | Enemies defeated | CONFIRMED | SET_ALL |
+| `+0xB20` | u32 | `defeated_2_at_once` | Defeated 2 enemies at once | LIKELY | SET_ALL |
+| `+0xB24` | u32 | `defeated_4_at_once` | Defeated 4 enemies at once | CONFIRMED | SET_ALL |
+| `+0xB28` | u32 | `unknown_b28` | ? (zero for all characters) | UNKNOWN | RO, HIDDEN |
+| `+0xB2C` | u32 | `critical_hits` | Critical hits | CONFIRMED | SET_ALL |
+| `+0xB30` | u32 | `weakness_hits` | Weakness hits | CONFIRMED | SET_ALL |
+| `+0xB34` | u32 | `damage_received` | Damage received | LIKELY | SET_ALL |
+| `+0xB38` | u16 | `quick_battles` | Battles ended within 10 s | GUESS | SET_ALL |
+| `+0xB3A` | u16 | `cc1_artes` | CC1 artes used | INFERRED | SET_ALL |
+| `+0xB3C` | u16 | `cc2_artes` | CC2 artes used | INFERRED | SET_ALL |
+| `+0xB3E` | u16 | `cc3_artes` | CC3 artes used | INFERRED | SET_ALL |
+| `+0xB40` | u16 | `cc4_artes` | CC4 artes used | CONFIRMED | SET_ALL |
+| `+0xB42` | u16 | `unknown_b42` | ? (likely arte-related) | UNKNOWN | RO, HIDDEN |
+| `+0xB44` | u16 | `a_artes` | A-arte uses, total | CONFIRMED | SET_ALL |
+| `+0xB46` | u16 | `b_artes` | B-arte uses, total | CONFIRMED | SET_ALL |
+| `+0xB48` | u16 | `items_stolen` | Items stolen | CONFIRMED | SET_ALL |
+| `+0xB4A` | u16 | `items_received` | Items received after battle | CONFIRMED | SET_ALL |
+| `+0xB4C` | u16 | `battles_controlled` | Battles won as the player-controlled character | LIKELY | SET_ALL |
+| `+0xB4E` | u16 | `defended_poison` | Status defended: Poison | GUESS | SET_ALL |
+| `+0xB50` | u16 | `defended_paralysis` | Status defended: Paralysis | GUESS | SET_ALL |
+| `+0xB52` | u16 | `defended_freeze` | Status defended: Freeze | GUESS | SET_ALL |
+| `+0xB54` | u16 | `defended_burn` | Status defended: Burn | GUESS | SET_ALL |
+| `+0xB56` | u16 | `defended_petrify` | Status defended: Petrify | GUESS | SET_ALL |
+| `+0xB58` | u16 | `defended_heavy` | Status defended: Heavy | GUESS | SET_ALL |
+| `+0xB5A` | u16 | `defended_seal` | Status defended: Seal | GUESS | SET_ALL |
+| `+0xB5C` | u16 | `defended_curse` | Status defended: Curse | GUESS | SET_ALL |
+| `+0xB5E` | u16 | `defended_weaken` | Status defended: Weaken | GUESS | SET_ALL |
+| `+0xB60` | u16 | `dishes_cooked` | Dishes cooked (counted toward titles) | GUESS | SET_ALL |
 
 - The two UNKNOWN fields are hidden and read-only, so neither "set all" nor a normal edit touches
   them. They can still be seen with "show hidden" and written with force, or through the hex
@@ -163,9 +163,9 @@ that he doesn't already have.
 
 ## Battles together
 
-| Rel | Type | Key | Confidence | Flags | Hint |
-|---|---|---|---|---|---|
-| `+0xB62 + 2 × partner_index` | u16 | partner id (`asbel` … `richard`) | CONFIRMED | RO (own slot also HIDDEN) | `hint.pair` (table-wide) |
+| Rel | Type | Key | Confidence | Flags |
+|---|---|---|---|---|
+| `+0xB62 + 2 × partner_index` | u16 | partner id (`asbel` … `richard`) | CONFIRMED | RO (own slot also HIDDEN) |
 
 - One u16 per character, in block order: 0 Asbel, 1 Sophie, 2 Hubert, 3 Cheria, 4 Malik,
   5 Pascal, 6 Richard. Richard's column is shown even though his own block isn't mapped yet.

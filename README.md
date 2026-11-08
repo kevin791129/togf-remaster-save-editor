@@ -227,13 +227,25 @@ The page has these tabs:
 | Tab | What it shows |
 |---|---|
 | Overview | Layout, CRC and backup status, warnings, and slot 1 (read only) |
-| Items / Artes | One sub-tab per category or character, with a filter box and a "set all to max" button |
+| Characters | A character list (a dropdown on narrow screens), then one sub-tab per section: stats, artes, combat counters, battles together. Each has a filter box and, where it applies, a "set all to max" button. |
+| Items | One sub-tab per category, with a filter box and a "set all to max" button |
 | Shards | Slots with type and nature dropdowns and a strength field. You can add a shard to the first empty slot, remove one, clear all, and fix the type counts when they don't match the slots. |
 | Misc | Single values, each with its own offset, size and cap: gald (u32 at `0x76D4`, max 9999999). |
 
 Each change is sent to the server immediately. A rejected value shows the error and goes back to
 its old value. The language dropdown switches all text, and the choice is remembered in the
 browser.
+
+- **Hints:** an ⓘ next to a field, or on a section tab for the whole table, shows a hint when you
+  hover over it or move to it with the keyboard.
+- **Read-only fields** show their value with a 🔒. **Hidden fields**, such as unknown counters,
+  are not listed.
+- Two checkboxes under the tabs apply to every tab:
+  - **Show hidden** lists hidden fields, greyed out and tagged.
+  - **Allow editing read-only** turns read-only values into inputs (🔓) and shows a warning
+    next to the checkboxes.
+
+  Neither is remembered after a reload.
 
 - Uploading a save opens an editing session. Sessions are kept in server memory, and your
   file on disk is never changed.
@@ -274,6 +286,7 @@ togf_save/
   web/             FastAPI app + static frontend
     routes/        API routes, one module per group
 docs/
+  save-format.md       container, encryption, slot JSON, decoded folder
   character-block.md   per-character data map
   items.md             item counts
   misc.md              single values (gald) and values coming soon
@@ -300,17 +313,8 @@ Each language is a folder in `togf_save/locales/` with two files:
   `DEFAULT_LANG` for both.
 - **Not translated:** CLI `--help` text and library error messages are English only.
 
-## Save format (summary)
+## Save format
 
-| Range | Content |
-|---|---|
-| `0x00000-0x61000` | slot 1: `[u32 len][u32 crc32][AES body]`, then an ignored stale tail and zero padding |
-| `0x61000-0xC2000` | backup of slot 1 |
-| `0xC2000-0xDD000` | slot 2: `[u32 len][u32 crc32][AES body]`, then zero padding |
-| `0xDD000-EOF` | backup of slot 2 (unpadded) |
-
-- Bodies are AES-128-CBC with PKCS7 padding.
-- The key and IV come from PBKDF2-SHA1 with 1000 rounds.
-- The plaintext is JSON, and binary fields are base64.
-- Slot 1 holds the load-menu summary and thumbnail.
-- Slot 2 holds `NativeData` (the game state) and `NobleData` (remaster data).
+The container layout, encryption, slot contents and decoded folder are described in
+[docs/save-format.md](docs/save-format.md). The `NativeData` field maps are in the other files
+in [docs/](docs/).

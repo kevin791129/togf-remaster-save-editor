@@ -161,7 +161,7 @@ def test_table_list_characters(capsys):
     assert "角色" in out and "艾斯貝爾" in out
     for tid in ("asbel.stat", "asbel.arte", "pascal.counter", "malik.together", "item.consumable", "misc"):
         assert tid in out
-    assert out.count("asbel.arte") == 1  # listed under its character, not again under artes
+    assert out.count("asbel.arte") == 1  # listed once, under its character
     assert "stat.asbel" not in out  # ids are <character>.<table>
     assert "    asbel.stat" in out and "能力值" in out
 
@@ -205,7 +205,8 @@ def test_table_rows_table_hint_once_in_header(native_bin, capsys):
     hint = i18n.text("hint.usage_count", "zh-Hant")
     with_hint = [line for line in lines if hint in line]
     assert len(with_hint) == 1 and with_hint[0] == lines[0]
-    assert with_hint[0].startswith("asbel.arte  艾斯貝爾") and with_hint[0].endswith("  # " + hint)
+    assert with_hint[0].startswith(f"asbel.arte  {i18n.name('section.artes', 'zh-Hant')}")
+    assert with_hint[0].endswith("  # " + hint)
 
 
 def test_table_show_hidden(native_bin, capsys):
