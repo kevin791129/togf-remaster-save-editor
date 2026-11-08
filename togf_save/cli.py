@@ -101,8 +101,9 @@ def cmd_table(a) -> None:
             print(_t(a, f"group.{group}"))
             for tid in ids:
                 t = get_table(tid)
-                print(f"  {tid:<18} {i18n.name(t.name_key or tid, a.lang)}  "
-                      + _t(a, "table.summary", count=t.count, max=t.max_value))
+                summary = (_t(a, "table.summary_count", count=t.count) if t.max_value is None
+                           else _t(a, "table.summary", count=t.count, max=t.max_value))
+                print(f"  {tid:<18} {i18n.name(t.name_key or tid, a.lang)}  {summary}")
         return
 
     t = get_table(a.table_id)
@@ -113,8 +114,7 @@ def cmd_table(a) -> None:
         return
 
     if a.set_all is not None:
-        value = t.max_value if a.set_all == "max" else a.set_all
-        edits = [(i, value) for i in range(t.count)]
+        edits = [(i, t.max_of(i) if a.set_all == "max" else a.set_all) for i in range(t.count)]
     else:
         edits = a.set
     for index, value in edits:

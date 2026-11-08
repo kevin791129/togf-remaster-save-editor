@@ -31,6 +31,7 @@
   "decode.done": "decoded {save} -> {outdir}",
 
   "table.summary": "({count} entries, max {max})",
+  "table.summary_count": "({count} entries)",
   "table.need_id": "give a TABLE_ID to edit",
   "table.native_first": "give the NATIVE file before {table}",
   "native.missing": "give the NATIVE file (slot2.NativeData.bin)",

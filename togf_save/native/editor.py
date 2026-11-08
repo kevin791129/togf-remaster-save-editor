@@ -39,7 +39,7 @@ class Shard:
         return cls(raw[0], raw[2], raw[3])
 
 
-def table(table_id: str) -> L.IntTable:
+def table(table_id: str) -> L.IntTable | L.FieldTable:
     try:
         return L.TABLES[table_id]
     except KeyError:
@@ -55,17 +55,18 @@ class NativeData:
     def to_bytes(self) -> bytes:
         return bytes(self.data)
 
-    # --- int tables (artes, items) ---
+    # --- int tables (artes, items, misc) ---
 
     def get(self, table_id: str, index: int) -> int:
         t = table(table_id)
-        return struct.unpack_from(t.fmt, self.data, t.offset_of(index))[0]
+        return struct.unpack_from(t.fmt_of(index), self.data, t.offset_of(index))[0]
 
     def set(self, table_id: str, index: int, value: int) -> None:
         t = table(table_id)
-        if not isinstance(value, int) or not 0 <= value <= t.max_value:
-            raise ValueError(f"{t.entry_id(index)}: value {value!r} out of range 0-{t.max_value}")
-        struct.pack_into(t.fmt, self.data, t.offset_of(index), value)
+        top = t.max_of(index)
+        if not isinstance(value, int) or not 0 <= value <= top:
+            raise ValueError(f"{t.entry_id(index)}: value {value!r} out of range 0-{top}")
+        struct.pack_into(t.fmt_of(index), self.data, t.offset_of(index), value)
 
     def values(self, table_id: str) -> list[int]:
         return [self.get(table_id, i) for i in range(table(table_id).count)]
@@ -74,11 +75,18 @@ class NativeData:
         for i in range(table(table_id).count):
             self.set(table_id, i, value)
 
+    def set_all_max(self, table_id: str) -> None:
+        """Every entry to its own max."""
+        t = table(table_id)
+        for i in range(t.count):
+            self.set(table_id, i, t.max_of(i))
+
     def rows(self, table_id: str, lang: str | None = None) -> list[dict]:
-        """Table entries with in-game number, id, display name, offset and current value."""
+        """Table entries with in-game number, id, display name, offset, max and current value."""
         t = table(table_id)
         return [{"index": i, "number": t.number(i), "id": t.entry_id(i), "name": i18n.name(t.entry_id(i), lang),
-                 "offset": t.offset_of(i), "value": self.get(table_id, i)} for i in range(t.count)]
+                 "offset": t.offset_of(i), "max": t.max_of(i), "value": self.get(table_id, i)}
+                for i in range(t.count)]
 
     # --- shards ---
 

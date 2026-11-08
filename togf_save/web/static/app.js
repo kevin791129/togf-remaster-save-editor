@@ -297,8 +297,8 @@ function valueTable(entries) {
   return { el, update, filter };
 }
 
-const entriesOf = (data, nameOf = (row) => row.name) => data.rows.map((row) => ({
-  tableId: data.id, index: row.index, number: row.number, id: row.id, name: nameOf(row), offset: row.offset, value: row.value, max: data.max,
+const entriesOf = (data) => data.rows.map((row) => ({
+  tableId: data.id, index: row.index, number: row.number, id: row.id, name: row.name, offset: row.offset, value: row.value, max: row.max,
 }));
 
 async function viewGroup(groupId) {
@@ -339,10 +339,7 @@ async function viewMisc() {
   const tables = await Promise.all(group.tables.map((tb) =>
     run(() => json("GET", withLang(sessionPath(`/tables/${tb.id}`))))));
   if (tables.includes(FAILED)) return null;
-  // one-entry tables show the table name; longer ones "table: entry"
-  const entries = tables.flatMap((data) =>
-    entriesOf(data, (row) => (data.rows.length === 1 ? data.name : `${data.name}: ${row.name}`)));
-  const table = valueTable(entries);
+  const table = valueTable(tables.flatMap(entriesOf));
   const setAllMax = async () => {
     for (const data of tables) {
       const res = await run(() => json("PATCH", withLang(sessionPath(`/tables/${data.id}`)), { set_all: "max" }));

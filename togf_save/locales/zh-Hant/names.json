@@ -60,7 +60,7 @@
   "arte.pascal.12": "格里姆希爾菲", "arte.pascal.13": "火熱鮮紅", "arte.pascal.14": "牢獄之炎", "arte.pascal.15": "布拉多蘭姆",
   "arte.pascal.16": "水波", "arte.pascal.17": "漩渦", "arte.pascal.18": "席安蒂姆", "arte.pascal.19": "三重衛星",
   "arte.pascal.20": "衝鋒信號", "arte.pascal.21": "壁壘信號", "arte.pascal.22": "閃耀領域", "arte.pascal.23": "稀薄原力",
-  "arte.pascal.24": "磁力圈", "arte.pascal.25": "夢想王國", "arte.pascal.26": "音速導師",
+  "arte.pascal.24": "磁力圈", "arte.pascal.25": "夢想王國", "arte.pascal.26": "音速導師", "arte.pascal.27": "八重聖星",
   "arte.pascal.28": "G十字劍", "arte.pascal.29": "S極限超越", "arte.pascal.30": "B・衝鋒",
 
   "item.consumable": "消耗品",
@@ -190,5 +190,8 @@
   "shard.nature.41": "不足夠", "shard.nature.43": "伍德隆性質",
   "shard.nature.45": "路克性質", "shard.nature.46": "康格曼性質", "shard.nature.48": "娜塔莉亞性質",
   "shard.nature.49": "娜娜莉性質", "shard.nature.50": "凱伊性質", "shard.nature.51": "吉尼亞斯性質", "shard.nature.52": "凱伊路特性",
-  "shard.nature.53": "尤金特性", "shard.nature.54": "凱烏斯性質"
+  "shard.nature.53": "尤金特性", "shard.nature.54": "凱烏斯性質",
+
+  "misc": "其他",
+  "misc.gald": "喀爾特"
 }

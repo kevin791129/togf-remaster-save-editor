@@ -136,5 +136,8 @@
   "shard.nature.41": "Deficient", "shard.nature.42": "Pointless", "shard.nature.43": "Garrtastic", "shard.nature.44": "Barbatosan",
   "shard.nature.45": "Lukerrific", "shard.nature.46": "Bruiserine", "shard.nature.47": "Lonimazing", "shard.nature.48": "Nataliated",
   "shard.nature.49": "Nanalystic", "shard.nature.50": "Guyabulous", "shard.nature.51": "Genisimile", "shard.nature.52": "Kyleicious",
-  "shard.nature.53": "Eugenelike", "shard.nature.54": "Caiusesque"
+  "shard.nature.53": "Eugenelike", "shard.nature.54": "Caiusesque",
+
+  "misc": "Misc",
+  "misc.gald": "Gald"
 }

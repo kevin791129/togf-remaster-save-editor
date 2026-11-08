@@ -201,5 +201,8 @@
   "shard.nature.41": "ものたりない", "shard.nature.42": "存在が空気", "shard.nature.43": "ウッドロウさ", "shard.nature.44": "バルバトスさ",
   "shard.nature.45": "ルークさ", "shard.nature.46": "コングマンさ", "shard.nature.47": "ロニさ", "shard.nature.48": "ナタリアさ",
   "shard.nature.49": "ナナリーさ", "shard.nature.50": "ガイさ", "shard.nature.51": "ジーニアスさ", "shard.nature.52": "カイルさ",
-  "shard.nature.53": "ユージーンさ", "shard.nature.54": "カイウスさ"
+  "shard.nature.53": "ユージーンさ", "shard.nature.54": "カイウスさ",
+
+  "misc": "その他",
+  "misc.gald": "ガルド"
 }

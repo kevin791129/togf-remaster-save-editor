@@ -1,4 +1,5 @@
 import re
+import struct
 
 import pytest
 
@@ -17,7 +18,7 @@ def native() -> NativeData:
 
 def _regions():
     for t in L.TABLES.values():
-        yield t.id, {t.offset_of(i) + b for i in range(t.count) for b in range(t.size)}
+        yield t.id, {t.offset_of(i) + b for i in range(t.count) for b in range(struct.calcsize(t.fmt_of(i)))}
     yield "shards", set(range(L.SHARD_OFFSET, L.SHARD_OFFSET + L.SHARD_SLOTS * L.SHARD_SIZE))
     yield "shard counts", set(range(L.SHARD_COUNT_OFFSET + 1, L.SHARD_COUNT_OFFSET + 1 + L.SHARD_TYPES))
 
@@ -56,6 +57,14 @@ def test_get_set(native):
     assert native.data[0x0762 + 12:0x0762 + 14] == b"\x34\x12"  # u16 little-endian
 
 
+def test_get_set_misc(native):
+    native.set("misc", 0, 1234567)
+    assert native.get("misc", 0) == 1234567
+    assert native.data[0x76D4:0x76D8] == (1234567).to_bytes(4, "little")  # gald: u32 little-endian
+    assert native.rows("misc", "en")[0] == {"index": 0, "number": 1, "id": "misc.gald", "name": "Gald",
+                                            "offset": 0x76D4, "max": 9999999, "value": 1234567}
+
+
 @pytest.mark.parametrize("value", [-1, 31, 256, 1.5, "3"])
 def test_set_out_of_range(native, value):
     with pytest.raises(ValueError):
@@ -64,7 +73,8 @@ def test_set_out_of_range(native, value):
 
 @pytest.mark.parametrize("table_id,limit", [("arte.asbel", 9999), ("item.consumable", 30),
                                             ("item.dish", 15), ("item.material", 15),
-                                            ("item.sellable", 15), ("item.ingredient", 15)])
+                                            ("item.sellable", 15), ("item.ingredient", 15),
+                                            ("misc", 9999999)])
 def test_limits(native, table_id, limit):
     native.set(table_id, 0, limit)
     with pytest.raises(ValueError, match=f"0-{limit}"):
@@ -87,11 +97,18 @@ def test_set_all(native):
     assert native.data[0xA79E - 1] == 0 and native.data[0xA79E + 47] == 0
 
 
+def test_set_all_max(native):
+    native.set_all_max("item.consumable")
+    native.set_all_max("misc")
+    assert native.values("item.consumable") == [30] * 35
+    assert native.get("misc", 0) == 9999999
+
+
 def test_rows(native):
     native.set("item.consumable", 4, 3)
     row = native.rows("item.consumable")[4]
     assert row == {"index": 4, "number": 5, "id": "item.consumable.4", "name": "萬靈藥瓶", "offset": 0xA645,
-                   "value": 3}
+                   "max": 30, "value": 3}
 
 
 def test_numbers_continue_across_material_sellable_ingredient():
@@ -209,6 +226,11 @@ def test_locale_keys_within_tables():
 def test_every_table_has_a_name():
     for t in L.TABLES.values():
         assert i18n.name(t.name_key or t.id) != (t.name_key or t.id), t.id
+
+
+def test_every_field_has_a_name():
+    for i in range(L.MISC.count):
+        assert i18n.name(L.MISC.entry_id(i)) != L.MISC.entry_id(i)
 
 
 def test_shard_names_complete_where_known():

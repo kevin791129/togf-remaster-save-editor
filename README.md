@@ -153,7 +153,7 @@ The page has these tabs:
 | Overview | Layout, CRC and backup status, warnings, and slot 1 (read only) |
 | Items / Artes | One sub-tab per category or character, with a filter box and a "set all to max" button |
 | Shards | Slots with type and nature dropdowns and a strength field. You can add a shard to the first empty slot, remove one, clear all, and fix the type counts when they don't match the slots. |
-| Misc | Single values such as gald. None are mapped yet. |
+| Misc | Single values, each with its own offset, size and cap: gald (u32 at `0x76D4`, max 9999999). |
 
 Each change is sent to the server immediately. A rejected value shows the error and goes back to
 its old value. The language dropdown switches all text, and the choice is remembered in the

@@ -31,6 +31,7 @@
   "decode.done": "デコードしました：{save} -> {outdir}",
 
   "table.summary": "（{count} 項目、上限 {max}）",
+  "table.summary_count": "（{count} 項目）",
   "table.need_id": "編集する TABLE_ID を指定してください",
   "table.native_first": "{table} の前に NATIVE ファイルを指定してください",
   "native.missing": "NATIVE ファイル（slot2.NativeData.bin）を指定してください",

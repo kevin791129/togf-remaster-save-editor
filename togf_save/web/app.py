@@ -27,7 +27,7 @@ Lang = Annotated[str | None, Query(description="language code for names; default
 
 class TableEdit(BaseModel):
     set: dict[int, int] = Field(default_factory=dict, description="{index: value}")
-    set_all: int | Literal["max"] | None = Field(None, description='a value, or "max" for the table max')
+    set_all: int | Literal["max"] | None = Field(None, description='a value, or "max" for each entry\'s max')
 
 
 class ShardIn(BaseModel):
@@ -165,8 +165,10 @@ def create_app(store: SessionStore | None = None) -> FastAPI:
         t = get_table(table_id)
         with s.lock:
             work = NativeData(s.native.to_bytes())  # all-or-nothing: apply to a copy first
-            if edit.set_all is not None:
-                work.set_all(table_id, t.max_value if edit.set_all == "max" else edit.set_all)
+            if edit.set_all == "max":
+                work.set_all_max(table_id)
+            elif edit.set_all is not None:
+                work.set_all(table_id, edit.set_all)
             for index, value in edit.set.items():
                 work.set(t.id, index, value)
             s.native = work

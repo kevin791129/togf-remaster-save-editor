@@ -43,7 +43,8 @@ def test_meta(client):
     assert {"id": "item.consumable", "name": "消耗品", "count": 35, "max": 30} in items["tables"]
     assert m["shards"]["types"][0] == {"value": 1, "name": "攻擊碎片"}
     assert len(m["shards"]["natures"]) == L.SHARD_NATURES
-    assert {"id": "misc", "name": "其他", "tables": []} in m["groups"]
+    assert {"id": "misc", "name": "其他",
+            "tables": [{"id": "misc", "name": "其他", "count": 1, "max": None}]} in m["groups"]
     assert m["ui"]["group.items"] == "道具"
 
 
@@ -118,6 +119,15 @@ def test_edit_table_set_all(client, sid):
 def test_edit_table_set_all_max(client, sid):
     r = client.patch(f"/api/sessions/{sid}/tables/item.consumable", json={"set_all": "max"})
     assert {row["value"] for row in r.json()["rows"]} == {30}
+
+
+def test_edit_misc(client, sid):
+    r = client.patch(f"/api/sessions/{sid}/tables/misc", json={"set_all": "max"})
+    gald = r.json()["rows"][0]
+    assert (gald["id"], gald["name"], gald["max"], gald["value"]) == ("misc.gald", "喀爾特", 9999999, 9999999)
+    assert downloaded(client, sid).get("misc", 0) == 9999999
+    r = client.patch(f"/api/sessions/{sid}/tables/misc", json={"set": {"0": 10000000}})
+    assert r.status_code == 422
 
 
 def test_edit_table_set_all_bad(client, sid):

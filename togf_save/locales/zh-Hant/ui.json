@@ -31,6 +31,7 @@
   "decode.done": "已解碼 {save} -> {outdir}",
 
   "table.summary": "（{count} 項，上限 {max}）",
+  "table.summary_count": "（{count} 項）",
   "table.need_id": "請指定要編輯的 TABLE_ID",
   "table.native_first": "請在 {table} 之前指定 NATIVE 檔案",
   "native.missing": "請指定 NATIVE 檔案（slot2.NativeData.bin）",

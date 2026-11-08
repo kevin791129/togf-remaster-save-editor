@@ -84,7 +84,7 @@ def test_table_list(native_bin, capsys):
     assert main(["table", str(native_bin), "--lang", "en"]) == 0
     out = capsys.readouterr().out
     assert "item.consumable" in out and "max 30" in out and "max 9999" in out
-    assert "Misc" in out  # empty group still listed
+    assert "Misc" in out and "(1 entries)" in out  # misc has no table-wide max
 
 
 def test_table_rows(native_bin, capsys):
@@ -105,7 +105,8 @@ def test_table_set_all_to_output(native_bin, tmp_path):
     assert native_of(native_bin).values("arte.asbel") == [0] * 36  # source untouched
 
 
-@pytest.mark.parametrize("table_id,limit", [("arte.asbel", 9999), ("item.consumable", 30), ("item.dish", 15)])
+@pytest.mark.parametrize("table_id,limit", [("arte.asbel", 9999), ("item.consumable", 30), ("item.dish", 15),
+                                            ("misc", 9999999)])
 def test_table_set_all_max(native_bin, table_id, limit):
     assert main(["table", str(native_bin), table_id, "--set-all", "max"]) == 0
     values = native_of(native_bin).values(table_id)
