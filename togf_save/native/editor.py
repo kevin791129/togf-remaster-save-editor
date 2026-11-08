@@ -1,42 +1,23 @@
-"""Read and edit slot2.NativeData through the field map in layout.py.
+"""Read and edit slot2.NativeData through the field map in the layout package.
 
     native = NativeData(save.native)
     native.set("item.consumable", 0, 15)
     native.set_shard(0, Shard(type=1, nature=3, strength=10))
     save.native = native.to_bytes()
+
+Field flags (layout.Flag): READ_ONLY fields are only written with force=True, HIDDEN
+fields are left out of rows() unless show_hidden=True, and set_all / set_all_max only
+touch SET_ALL fields. Shard operations live in shards.py (ShardSlots, mixed in here).
 """
+import math
 import struct
-from dataclasses import dataclass
 
 from .. import i18n
-from ..errors import SaveError
+from ..errors import ReadOnlyError, SaveError
 from . import layout as L
+from .shards import Shard, ShardSlots
 
-
-@dataclass(frozen=True)
-class Shard:
-    type: int  # 1-SHARD_TYPES
-    nature: int  # 1-SHARD_NATURES
-    strength: int  # 1-SHARD_MAX_STRENGTH
-
-    def __post_init__(self):
-        for field, value, top in (("type", self.type, L.SHARD_TYPES),
-                                  ("nature", self.nature, L.SHARD_NATURES),
-                                  ("strength", self.strength, L.SHARD_MAX_STRENGTH)):
-            if not isinstance(value, int) or not 1 <= value <= top:
-                raise ValueError(f"shard {field} {value!r} out of range 1-{top}")
-
-    def to_bytes(self) -> bytes:
-        return bytes([self.type, L.SHARD_MARKER, self.nature, self.strength])
-
-    @classmethod
-    def from_bytes(cls, raw: bytes) -> "Shard | None":
-        """None for an empty (all-zero) slot; ValueError if the bytes are not a shard."""
-        if not any(raw):
-            return None
-        if len(raw) != L.SHARD_SIZE or raw[1] != L.SHARD_MARKER:
-            raise ValueError(f"not a shard: {raw.hex(' ')}")
-        return cls(raw[0], raw[2], raw[3])
+__all__ = ["NativeData", "Shard", "table", "set_all_indexes"]
 
 
 def table(table_id: str) -> L.IntTable | L.FieldTable:
@@ -46,7 +27,13 @@ def table(table_id: str) -> L.IntTable | L.FieldTable:
         raise KeyError(f"unknown table {table_id!r}") from None
 
 
-class NativeData:
+def set_all_indexes(t: L.IntTable | L.FieldTable, force: bool = False) -> list[int]:
+    """Indexes that set_all / set_all_max write: SET_ALL entries, minus READ_ONLY ones unless forced."""
+    return [i for i in range(t.count)
+            if t.flags_of(i) & L.Flag.SET_ALL and (force or not t.flags_of(i) & L.Flag.READ_ONLY)]
+
+
+class NativeData(ShardSlots):
     def __init__(self, data: bytes):
         if len(data) < L.MIN_SIZE:
             raise SaveError(f"NativeData is {len(data):#x} bytes, expected at least {L.MIN_SIZE:#x}")
@@ -55,114 +42,73 @@ class NativeData:
     def to_bytes(self) -> bytes:
         return bytes(self.data)
 
-    # --- int tables (artes, items, misc) ---
+    # --- tables (artes, items, misc, ...) ---
 
     def get(self, table_id: str, index: int) -> int:
+        """The value as an int; float fields are rounded (NaN / infinity read as 0)."""
         t = table(table_id)
-        return struct.unpack_from(t.fmt_of(index), self.data, t.offset_of(index))[0]
+        fmt = t.fmt_of(index)
+        value = struct.unpack_from(fmt, self.data, t.offset_of(index))[0]
+        if L.is_float(fmt):
+            return round(value) if math.isfinite(value) else 0
+        return value
 
-    def set(self, table_id: str, index: int, value: int) -> None:
+    def set(self, table_id: str, index: int, value: int, force: bool = False) -> None:
+        """Write an int. A float field is stored as float(value), and left untouched when it
+        already reads as `value`, so its fractional part survives a no-op edit."""
         t = table(table_id)
+        if t.flags_of(index) & L.Flag.READ_ONLY and not force:
+            raise ReadOnlyError(f"{t.entry_id(index)} is read-only (force to write it)")
         top = t.max_of(index)
         if not isinstance(value, int) or not 0 <= value <= top:
             raise ValueError(f"{t.entry_id(index)}: value {value!r} out of range 0-{top}")
-        struct.pack_into(t.fmt_of(index), self.data, t.offset_of(index), value)
+        fmt = t.fmt_of(index)
+        if L.is_float(fmt):
+            if self.get(table_id, index) == value:
+                return
+            value = float(value)
+        struct.pack_into(fmt, self.data, t.offset_of(index), value)
 
     def values(self, table_id: str) -> list[int]:
         return [self.get(table_id, i) for i in range(table(table_id).count)]
 
-    def set_all(self, table_id: str, value: int) -> None:
-        for i in range(table(table_id).count):
-            self.set(table_id, i, value)
+    def _bulk_indexes(self, table_id: str, force: bool) -> list[int]:
+        indexes = set_all_indexes(table(table_id), force)
+        if not indexes:
+            raise ValueError(f"{table_id}: no entries can be set all at once"
+                             + ("" if force else " (read-only ones need force)"))
+        return indexes
 
-    def set_all_max(self, table_id: str) -> None:
-        """Every entry to its own max."""
+    def set_all(self, table_id: str, value: int, force: bool = False) -> None:
+        """Every SET_ALL entry to `value` (READ_ONLY ones only with force).
+        Checked against every entry first, so a bad value changes nothing."""
         t = table(table_id)
-        for i in range(t.count):
-            self.set(table_id, i, t.max_of(i))
+        indexes = self._bulk_indexes(table_id, force)
+        for i in indexes:
+            top = t.max_of(i)
+            if not isinstance(value, int) or not 0 <= value <= top:
+                raise ValueError(f"{t.entry_id(i)}: value {value!r} out of range 0-{top}")
+        for i in indexes:
+            self.set(table_id, i, value, force=True)
 
-    def rows(self, table_id: str, lang: str | None = None) -> list[dict]:
-        """Table entries with in-game number, id, display name, offset, max and current value."""
+    def set_all_max(self, table_id: str, force: bool = False) -> None:
+        """Every SET_ALL entry to its own max (READ_ONLY ones only with force)."""
         t = table(table_id)
-        return [{"index": i, "number": t.number(i), "id": t.entry_id(i), "name": i18n.name(t.entry_id(i), lang),
-                 "offset": t.offset_of(i), "max": t.max_of(i), "value": self.get(table_id, i)}
-                for i in range(t.count)]
+        for i in self._bulk_indexes(table_id, force):
+            self.set(table_id, i, t.max_of(i), force=True)
 
-    # --- shards ---
-
-    @staticmethod
-    def _shard_offset(slot: int) -> int:
-        if not 0 <= slot < L.SHARD_SLOTS:
-            raise IndexError(f"shard slot {slot} out of range 0-{L.SHARD_SLOTS - 1}")
-        return L.SHARD_OFFSET + slot * L.SHARD_SIZE
-
-    def shard_raw(self, slot: int) -> bytes:
-        pos = self._shard_offset(slot)
-        return bytes(self.data[pos:pos + L.SHARD_SIZE])
-
-    def shard(self, slot: int) -> Shard | None:
-        try:
-            return Shard.from_bytes(self.shard_raw(slot))
-        except ValueError as e:
-            raise ValueError(f"shard slot {slot}: {e}") from None
-
-    def shards(self) -> list[Shard | None]:
-        return [self.shard(s) for s in range(L.SHARD_SLOTS)]
-
-    def shard_count(self, shard_type: int) -> int:
-        """Stored per-type count byte (what the game shows), not a count of the slots."""
-        return self.data[L.SHARD_COUNT_OFFSET + shard_type]
-
-    def set_shard(self, slot: int, shard: Shard | None) -> None:
-        """Put `shard` in `slot` (None empties it), keeping the per-type counts in step."""
-        old = self.shard(slot)  # raises if the slot holds something that is not a shard
-        if old == shard:
-            return
-        if old is not None:
-            if self.shard_count(old.type) == 0:
-                raise SaveError(f"count of shard type {old.type} is already 0; counts don't match the slots")
-            self.data[L.SHARD_COUNT_OFFSET + old.type] -= 1
-        if shard is not None:
-            if self.shard_count(shard.type) == 0xFF:
-                raise SaveError(f"count of shard type {shard.type} is already 255")
-            self.data[L.SHARD_COUNT_OFFSET + shard.type] += 1
-        pos = self._shard_offset(slot)
-        self.data[pos:pos + L.SHARD_SIZE] = shard.to_bytes() if shard else bytes(L.SHARD_SIZE)
-
-    def clear_shards(self) -> None:
-        """Empty every slot and zero every per-type count."""
-        self.data[L.SHARD_OFFSET:L.SHARD_OFFSET + L.SHARD_SLOTS * L.SHARD_SIZE] = \
-            bytes(L.SHARD_SLOTS * L.SHARD_SIZE)
-        self.data[L.SHARD_COUNT_OFFSET + 1:L.SHARD_COUNT_OFFSET + 1 + L.SHARD_TYPES] = bytes(L.SHARD_TYPES)
-
-    def shard_count_mismatches(self) -> dict[int, tuple[int, int]]:
-        """{type: (stored count, slots holding that type)} for every type that disagrees."""
-        actual = [0] * (L.SHARD_TYPES + 1)
-        for s in self.shards():
-            if s is not None:
-                actual[s.type] += 1
-        return {t: (self.shard_count(t), actual[t]) for t in range(1, L.SHARD_TYPES + 1)
-                if self.shard_count(t) != actual[t]}
-
-    def fix_shard_counts(self) -> None:
-        for t, (_, actual) in self.shard_count_mismatches().items():
-            self.data[L.SHARD_COUNT_OFFSET + t] = actual
-
-    def shard_rows(self, lang: str | None = None) -> list[dict]:
-        """Every slot with its raw bytes and, if it holds a shard, values and names.
-        A slot with unrecognised bytes gets an "error" instead of failing the whole list."""
+    def rows(self, table_id: str, lang: str | None = None, show_hidden: bool = False) -> list[dict]:
+        """Table entries with in-game number, id, display name, offset, max, current value,
+        flags and hint text ("" for none). HIDDEN entries only with show_hidden."""
+        t = table(table_id)
         rows = []
-        for slot in range(L.SHARD_SLOTS):
-            row = {"slot": slot, "offset": self._shard_offset(slot), "raw": self.shard_raw(slot).hex(" "),
-                   "shard": None}
-            try:
-                s = self.shard(slot)
-            except ValueError as e:
-                row["error"] = str(e)
-            else:
-                if s is not None:
-                    row["shard"] = {"type": s.type, "nature": s.nature, "strength": s.strength,
-                                    "type_name": i18n.name(f"shard.type.{s.type}", lang),
-                                    "nature_name": i18n.name(f"shard.nature.{s.nature}", lang)}
-            rows.append(row)
+        for i in range(t.count):
+            flags = t.flags_of(i)
+            if flags & L.Flag.HIDDEN and not show_hidden:
+                continue
+            hint = t.hint_id(i)
+            rows.append({"index": i, "number": t.number(i), "id": t.entry_id(i), "name": i18n.name(t.name_id(i), lang),
+                         "offset": t.offset_of(i), "max": t.max_of(i), "value": self.get(table_id, i),
+                         "read_only": bool(flags & L.Flag.READ_ONLY), "hidden": bool(flags & L.Flag.HIDDEN),
+                         "set_all": bool(flags & L.Flag.SET_ALL), "hint": i18n.text(hint, lang) if hint else ""})
         return rows

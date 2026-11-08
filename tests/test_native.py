@@ -3,8 +3,8 @@ import struct
 
 import pytest
 
-from togf_save import SaveError, decode, encode, i18n, read_save
-from togf_save.native import NativeData, Shard, layout as L
+from togf_save import ReadOnlyError, SaveError, decode, encode, i18n, read_save
+from togf_save.native import NativeData, Shard, layout as L, set_all_indexes
 
 from .helpers import NATIVE_SIZE
 
@@ -36,9 +36,75 @@ def test_regions_fit():
     assert all(max(region) < L.MIN_SIZE for _, region in _regions())
 
 
-def test_arte_blocks_are_evenly_spaced():
-    offsets = [t.offset for t in L.ARTES]
-    assert all(b - a == L.ARTE_BLOCK for a, b in zip(offsets, offsets[1:]))
+def test_char_offset():
+    assert L.char_offset("asbel", 0) == 0x84
+    assert L.char_offset(1, 0) == 0x84 + 0xBD8
+    assert L.char_offset("richard", L.ARTE_REL) == 0x4E72
+    with pytest.raises(ValueError):
+        L.char_offset("nobody", 0)
+    with pytest.raises(IndexError):
+        L.char_offset(len(L.CHARACTERS), 0)
+
+
+def test_arte_offsets():
+    """Offsets found by diffing saves, before the character block map existed."""
+    found = {"asbel": 0x0762, "sophie": 0x133A, "hubert": 0x1F12, "cheria": 0x2AEA,
+             "malik": 0x36C2, "pascal": 0x429A}
+    assert {t.id: t.offset for t in L.ARTES} == {f"arte.{c}": o for c, o in found.items()}
+
+
+def test_active_characters_have_arte_counts():
+    assert L.ACTIVE_CHARACTERS == tuple(c for c in L.CHARACTERS if c in L.ARTE_COUNTS)
+
+
+# --- flags, name ids, hint ids ---
+
+_PROBE = L.FieldTable("probe", (
+    L.Field("plain", 0x10, 2),
+    L.Field("own", 0x12, 2, flags=L.Flag.READ_ONLY | L.Flag.HIDDEN, name_key="shared.name", hint_key="hint.own"),
+    L.Field("no_hint", 0x14, 2, hint_key=""),
+), flags=L.Flag.SET_ALL, hint_key="hint.table")
+
+
+def test_field_table_flags_combine_table_and_field():
+    assert _PROBE.flags_of(0) == L.Flag.SET_ALL
+    assert _PROBE.flags_of(1) == L.Flag.SET_ALL | L.Flag.READ_ONLY | L.Flag.HIDDEN
+    with pytest.raises(IndexError):
+        _PROBE.flags_of(3)
+
+
+def test_field_table_name_id():
+    assert _PROBE.name_id(0) == "probe.plain"  # defaults to the entry id
+    assert _PROBE.name_id(1) == "shared.name"
+
+
+def test_field_table_hint_id():
+    assert _PROBE.hint_id(0) == "hint.table"  # None: inherits the table's hint
+    assert _PROBE.hint_id(1) == "hint.own"
+    assert _PROBE.hint_id(2) == ""  # "": explicitly none
+
+
+def test_int_table_flags_name_hint():
+    t = L.TABLES["arte.asbel"]
+    assert t.flags_of(0) == L.Flag.SET_ALL
+    assert t.name_id(3) == t.entry_id(3) == "arte.asbel.3"
+    assert t.hint_id(0) == "hint.usage_count"
+    for method in (t.flags_of, t.hint_id):
+        with pytest.raises(IndexError):
+            method(t.count)
+    assert L.TABLES["item.dish"].hint_id(0) == ""
+
+
+def test_existing_tables_are_set_all():
+    for t in L.ARTES + L.ITEMS + (L.MISC,):
+        assert all(t.flags_of(i) & L.Flag.SET_ALL for i in range(t.count)), t.id
+
+
+@pytest.mark.parametrize("lang", ["en", "ja", "zh-Hant"])
+def test_hint_keys_exist(lang):
+    ui = i18n.load(lang, "ui")
+    missing = {t.hint_id(i) for t in L.TABLES.values() for i in range(t.count)} - {""} - ui.keys()
+    assert not missing, sorted(missing)
 
 
 def test_items_are_ordered_and_contiguous_where_known():
@@ -62,7 +128,8 @@ def test_get_set_misc(native):
     assert native.get("misc", 0) == 1234567
     assert native.data[0x76D4:0x76D8] == (1234567).to_bytes(4, "little")  # gald: u32 little-endian
     assert native.rows("misc", "en")[0] == {"index": 0, "number": 1, "id": "misc.gald", "name": "Gald",
-                                            "offset": 0x76D4, "max": 9999999, "value": 1234567}
+                                            "offset": 0x76D4, "max": 9999999, "value": 1234567,
+                                            "read_only": False, "hidden": False, "set_all": True, "hint": ""}
 
 
 @pytest.mark.parametrize("value", [-1, 31, 256, 1.5, "3"])
@@ -108,7 +175,163 @@ def test_rows(native):
     native.set("item.consumable", 4, 3)
     row = native.rows("item.consumable")[4]
     assert row == {"index": 4, "number": 5, "id": "item.consumable.4", "name": "萬靈藥瓶", "offset": 0xA645,
-                   "max": 30, "value": 3}
+                   "max": 30, "value": 3, "read_only": False, "hidden": False, "set_all": True, "hint": ""}
+
+
+def test_rows_hint(native):
+    assert native.rows("arte.asbel", "zh-Hant")[0]["hint"] == i18n.text("hint.usage_count", "zh-Hant") != ""
+
+
+# --- flags in the editor (on a stand-in table, until real tables use them) ---
+
+_F = L.Flag
+_FLAGGED = L.FieldTable("flagged", (
+    L.Field("plain", 0x10, 2, limit=100, flags=_F.SET_ALL),
+    L.Field("locked", 0x12, 2, limit=50, flags=_F.READ_ONLY | _F.SET_ALL, hint_key="hint.usage_count"),
+    L.Field("secret", 0x14, 2, flags=_F.HIDDEN | _F.SET_ALL),
+    L.Field("fixed", 0x16, 2, flags=_F.READ_ONLY | _F.HIDDEN),
+    L.Field("bulk_off", 0x18, 2),
+))
+_NO_BULK = L.FieldTable("no_bulk", (L.Field("a", 0x10, 2), L.Field("b", 0x12, 2, flags=_F.READ_ONLY)))
+
+
+@pytest.fixture
+def flagged(monkeypatch, native) -> NativeData:
+    monkeypatch.setitem(L.TABLES, "flagged", _FLAGGED)
+    return native
+
+
+def test_read_only_needs_force(flagged):
+    with pytest.raises(ReadOnlyError, match="flagged.locked"):
+        flagged.set("flagged", 1, 5)
+    assert flagged.get("flagged", 1) == 0
+    flagged.set("flagged", 1, 5, force=True)
+    assert flagged.get("flagged", 1) == 5
+    with pytest.raises(ValueError, match="0-50"):  # force skips the read-only check, not the range
+        flagged.set("flagged", 1, 51, force=True)
+
+
+def test_read_only_error_is_a_value_error():
+    assert issubclass(ReadOnlyError, ValueError)  # CLI and web report it like any bad value
+
+
+def test_set_all_touches_set_all_entries_only(flagged):
+    flagged.set_all("flagged", 7)
+    assert flagged.values("flagged") == [7, 0, 7, 0, 0]  # locked: read-only, fixed and bulk_off: not SET_ALL
+    flagged.set_all("flagged", 9, force=True)
+    assert flagged.values("flagged") == [9, 9, 9, 0, 0]
+
+
+def test_set_all_max_respects_flags(flagged):
+    flagged.set_all_max("flagged")
+    assert flagged.values("flagged") == [100, 0, 0xFFFF, 0, 0]
+    flagged.set_all_max("flagged", force=True)
+    assert flagged.values("flagged") == [100, 50, 0xFFFF, 0, 0]
+
+
+def test_set_all_checks_every_entry_first(flagged):
+    with pytest.raises(ValueError, match="0-100"):
+        flagged.set_all("flagged", 101)
+    assert flagged.values("flagged") == [0] * 5  # nothing written, not even the entry it fits
+
+
+def test_set_all_needs_a_set_all_entry(monkeypatch, native):
+    monkeypatch.setitem(L.TABLES, "no_bulk", _NO_BULK)
+    for call in (lambda: native.set_all("no_bulk", 1), lambda: native.set_all_max("no_bulk", force=True)):
+        with pytest.raises(ValueError, match="no entries"):
+            call()
+
+
+def test_set_all_indexes(flagged):
+    t = L.TABLES["flagged"]
+    assert set_all_indexes(t) == [0, 2]
+    assert set_all_indexes(t, force=True) == [0, 1, 2]
+
+
+# --- float fields (stand-in table, until the stat tables use them) ---
+
+_FLOATS = L.FieldTable("floats", (
+    L.Field("a", 0x20, 4, limit=1999, kind="float", flags=_F.SET_ALL),
+    L.Field("b", 0x24, 4, limit=1999, kind="float", flags=_F.SET_ALL),
+))
+
+
+@pytest.fixture
+def floats(monkeypatch, native) -> NativeData:
+    monkeypatch.setitem(L.TABLES, "floats", _FLOATS)
+    return native
+
+
+def _put_f32(native, offset, value):
+    struct.pack_into("<f", native.data, offset, value)
+
+
+def _f32(native, offset):
+    return struct.unpack_from("<f", native.data, offset)[0]
+
+
+def test_float_round_trip(floats):
+    floats.set("floats", 0, 812)
+    assert floats.data[0x20:0x24] == struct.pack("<f", 812.0)
+    assert floats.get("floats", 0) == 812 and isinstance(floats.get("floats", 0), int)
+
+
+@pytest.mark.parametrize("stored,shown", [(812.4, 812), (812.6, 813), (0.2, 0), (1998.9, 1999)])
+def test_float_reads_rounded(floats, stored, shown):
+    _put_f32(floats, 0x20, stored)
+    assert floats.get("floats", 0) == shown
+
+
+@pytest.mark.parametrize("stored", [float("nan"), float("inf")])
+def test_float_not_finite_reads_zero(floats, stored):
+    _put_f32(floats, 0x20, stored)
+    assert floats.get("floats", 0) == 0
+
+
+def test_float_keeps_fraction_unless_changed(floats):
+    _put_f32(floats, 0x20, 812.6)
+    _put_f32(floats, 0x24, 100.25)
+    floats.set("floats", 0, 813)  # same whole number: not written
+    assert _f32(floats, 0x20) == pytest.approx(812.6)
+    floats.set("floats", 0, 900)
+    assert _f32(floats, 0x20) == 900.0
+    assert _f32(floats, 0x24) == 100.25  # the other cell is untouched
+
+
+@pytest.mark.parametrize("value", [-1, 2000, 1.5])
+def test_float_set_out_of_range(floats, value):
+    with pytest.raises(ValueError, match="0-1999"):
+        floats.set("floats", 0, value)
+
+
+def test_float_set_all_max(floats):
+    floats.set_all_max("floats")
+    assert floats.values("floats") == [1999, 1999]
+    assert _f32(floats, 0x20) == 1999.0
+
+
+def test_float_field_needs_a_limit():
+    with pytest.raises(ValueError, match="limit"):
+        L.Field("x", 0, 4, kind="float")
+
+
+@pytest.mark.parametrize("kind,size", [("float", 2), ("float", 8), ("uint", 3)])
+def test_field_size_must_match_kind(kind, size):
+    with pytest.raises(ValueError, match="bytes"):
+        L.Field("x", 0, size, limit=1, kind=kind)
+
+
+def test_is_float():
+    assert L.is_float(_FLOATS.fmt_of(0)) and not L.is_float(L.MISC.fmt_of(0))
+
+
+def test_rows_hide_hidden(flagged):
+    assert [r["id"] for r in flagged.rows("flagged")] == ["flagged.plain", "flagged.locked", "flagged.bulk_off"]
+    rows = flagged.rows("flagged", show_hidden=True)
+    assert [r["index"] for r in rows] == [0, 1, 2, 3, 4]
+    assert [(r["read_only"], r["hidden"], r["set_all"]) for r in rows] == [
+        (False, False, True), (True, False, True), (False, True, True), (True, True, False), (False, False, False)]
+    assert rows[1]["hint"] == i18n.text("hint.usage_count") and rows[0]["hint"] == ""
 
 
 def test_numbers_continue_across_material_sellable_ingredient():
@@ -229,8 +452,10 @@ def test_every_table_has_a_name():
 
 
 def test_every_field_has_a_name():
-    for i in range(L.MISC.count):
-        assert i18n.name(L.MISC.entry_id(i)) != L.MISC.entry_id(i)
+    for t in L.TABLES.values():
+        if isinstance(t, L.FieldTable):
+            for i in range(t.count):
+                assert i18n.name(t.name_id(i)) != t.name_id(i), t.entry_id(i)
 
 
 def test_shard_names_complete_where_known():

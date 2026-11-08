@@ -11,6 +11,13 @@
   "shard.field.strength": "強度",
   "shard.empty": "（空）",
 
+  "hint.usage_count": "使用次數",
+  "hint.linked_exp": "與經驗值、距下一級、等級互相連動",
+  "hint.linked_hp": "目前HP不可超過最大HP",
+  "hint.pair": "對方角色也記錄了同一數值，兩邊都要修改才會一致",
+  "hint.combo_tier": "達成此連擊數的次數",
+  "hint.status_defended": "防禦此異常狀態的次數",
+
   "common.yes": "是",
   "common.no": "否",
   "common.warning": "警告：{message}",

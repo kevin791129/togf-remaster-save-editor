@@ -82,7 +82,7 @@ write_save(save, "SaveDat000.sav")  # first overwrite moves the original to Save
 
 Table ids are `arte.<character>` (asbel, sophie, hubert, cheria, malik, pascal) and
 `item.<category>` (consumable, dish, material, sellable, ingredient). See
-[togf_save/native/layout.py](togf_save/native/layout.py) for offsets.
+[togf_save/native/layout/](togf_save/native/layout/) for offsets.
 
 To edit with your own tools, `togf_save.folder` has `export_folder(save, dir)` and
 `import_folder(dir)`. They use the same folder format as the CLI `decode` and `encode` commands.
